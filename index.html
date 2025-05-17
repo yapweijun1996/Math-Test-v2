@@ -227,6 +227,8 @@
       }
       // 季节性模型 (Seasonal)
       const predSeasonal = lastCloses[0];
+      // 多日季节性预测
+      const futurePredsSeasonal = Array(futureDays).fill(predSeasonal);
       // 均线 + 趋势 (MA + Trend)
       const predMAtrend = (avg + predLR) / 2;
       // 自回归模型 (AR1)
@@ -377,12 +379,15 @@
           html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">多项式回归 (Polynomial Regression) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
         });
         // Poly 详细演算
-        html += `<details><summary>详细演算 (Polynomial Regression)</summary><p>a = ${a_poly.toFixed(4)}, b = ${b_poly.toFixed(4)}, c = ${c_poly.toFixed(4)}</p><p>预测 = a + b×N + c×N²</p></details>`;
+        html += `<details><summary>详细演算 (Polynomial Regression)</summary><p>a = ${a_poly.toFixed(4)}, b = ${b_poly.toFixed(4)}, c = ${c_poly.toFixed(4)}</p><p>预测 = a + b·N + c·N²</p></details>`;
         html += `</div>`;
       }
       if (method === 'seasonal' || method === 'all') {
         html += `<div class="method-card" data-method="seasonal">`;
-        html += `<div class="prediction ${getUpDownClass(predSeasonal, lastPrice)}">季节性模型 (Seasonal) 预测 ${predictedDateLabel} 收盘价：${predSeasonal.toFixed(2)} USD</div>`;
+        // 多日季节性预测
+        futurePredsSeasonal.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">季节性模型 (Seasonal) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // Seasonal 详细演算
         html += `<details><summary>详细演算 (季节性模型)</summary><p>使用 P₁ = ${lastCloses[0].toFixed(2)} 作为预测值</p></details>`;
         html += `</div>`;
@@ -484,6 +489,7 @@
       const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
       const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
       const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
+      const seasonalPredictionData = Array(closes.length).fill(null).concat(futurePredsSeasonal);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -503,7 +509,7 @@
         datasets.push({ label: '多项式回归 (Polynomial)', data: polyPredictionData, borderColor: '#cc0077', backgroundColor: '#cc0077', pointStyle: 'triangle', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'seasonal' || method === 'all') {
-        datasets.push({ label: '季节性 (Seasonal)', data: Array(closes.length).fill(null).concat([predSeasonal]), borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: '季节性 (Seasonal)', data: seasonalPredictionData, borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ma_trend' || method === 'all') {
         datasets.push({ label: '均线+趋势 (MA+Trend)', data: Array(closes.length).fill(null).concat([predMAtrend]), borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'scatter', showLine: false });
