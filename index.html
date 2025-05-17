@@ -626,15 +626,26 @@
       for (let i = 1; i <= futureDays; i++) {
         futurePredsLR.push(intercept + slope * (n + i - 1));
       }
-      // 计算指数加权移动平均 (EMA)
-      const alpha = 2 / (n + 1);
-      let emaValues = [ lastCloses[0] ];
+      // 霍尔特线性平滑 (Holt's Linear Method) 替代简单EMA，实现趋势预测
+      const alphaH = 0.3; // 平滑因子
+      const betaH = 0.1;  // 趋势平滑因子
+      // 初始化水平和趋势
+      let level = lastCloses[0];
+      let trend = lastCloses[1] - lastCloses[0] || 0;
+      // 迭代更新水平和趋势
       for (let i = 1; i < n; i++) {
-        emaValues.push(alpha * lastCloses[i] + (1 - alpha) * emaValues[i - 1]);
+        const value = lastCloses[i];
+        const prevLevel = level;
+        level = alphaH * value + (1 - alphaH) * (level + trend);
+        trend = betaH * (level - prevLevel) + (1 - betaH) * trend;
       }
-      const predEMA = emaValues[n - 1];
-      // 多日EMA预测
-      const futurePredsEMA = Array(futureDays).fill(predEMA);
+      // 单步预测
+      const predEMA = level + trend;
+      // 多步预测
+      const futurePredsEMA = [];
+      for (let i = 1; i <= futureDays; i++) {
+        futurePredsEMA.push(level + trend * i);
+      }
       // 计算多项式回归 (Polynomial Regression)
       let SumY = 0, SumXY = 0, SumX2Y = 0, Sx0 = n, Sx1 = 0, Sx2 = 0, Sx3 = 0, Sx4 = 0;
       for (let i = 0; i < n; i++) {
@@ -834,17 +845,13 @@
       }
       if (method === 'ema' || method === 'all') {
         html += `<div class="method-card" data-method="ema">`;
-        // 多日EMA预测
+        // 多日霍尔特线性平滑预测
         futurePredsEMA.forEach((pred, idx) => {
-          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">指数加权移动平均 (EMA) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">霍尔特线性平滑预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
         });
-        // EMA 详细演算
-        html += `<details><summary>详细演算 (EMA)</summary><p>α = ${alpha.toFixed(4)}</p><ul>`;
-        emaValues.forEach((v,i) => html += `<li>EMA_${i+1} = ${v.toFixed(2)}</li>`);
-        html += `</ul></details>`;
+        // 详细演算
+        html += `<details><summary>详细演算 (Holt's Linear)</summary><p>初始化: L0 = ${lastCloses[0].toFixed(2)}, T0 = ${(lastCloses[1] - lastCloses[0]).toFixed(2)}</p><p>更新公式: L_t = α·P_t + (1−α)·(L_{t−1}+T_{t−1}), T_t = β·(L_t−L_{t−1}) + (1−β)·T_{t−1}</p><p>预测: F_{t+i} = L_t + i·T_t</p></details>`;
         html += `</div>`;
-        const errsEMA = calcError('ema');
-        if (errsEMA) html += `<div class="error-info">误差分析 (MSE: ${errsEMA.mse.toFixed(2)}, MAE: ${errsEMA.mae.toFixed(2)})</div>`;
       }
       if (method === 'poly' || method === 'all') {
         html += `<div class="method-card" data-method="poly">`;
@@ -919,9 +926,10 @@
            &nbsp;&nbsp;截距 a = ȳ - b × x̄<br>
            &nbsp;&nbsp;预测 Pₙ₊₁ = a + b × N<br>
         • 指数加权移动平均 (EMA):<br>
-           &nbsp;&nbsp;α = 2/(N+1)<br>
-           &nbsp;&nbsp;EMA₁ = P₁; EMAₜ = α×Pₜ + (1−α)×EMAₜ₋₁;<br>
-           &nbsp;&nbsp;预测 Pₙ₊₁ ≈ EMA_N;<br>
+           &nbsp;&nbsp;使用霍尔特双指数平滑（含趋势分量）进行预测;<br>
+           &nbsp;&nbsp;水平更新: L_t = α·P_t + (1−α)·(L_{t−1}+T_{t−1});<br>
+           &nbsp;&nbsp;趋势更新: T_t = β·(L_t−L_{t−1}) + (1−β)·T_{t−1};<br>
+           &nbsp;&nbsp;预测 Pₙ₊ₕ = L_N + h·T_N;<br>
         • 多项式回归 (Polynomial Regression):<br>
            &nbsp;&nbsp;Fit y = a + b·x + c·x² via least squares;<br>
            &nbsp;&nbsp;预测 Pₙ₊₁ ≈ a + b·N + c·N²;<br>
