@@ -294,6 +294,19 @@
       } catch(e) {
         console.warn('TF.js 预测失败，使用 ensemble fallback', e);
       }
+      // 多日机器学习 (ML) 递归预测
+      const futurePredsML = [];
+      let mlInputs = lastCloses.slice();
+      for (let i = 1; i <= futureDays; i++) {
+        let mlPred = (avg + predLR + predEMA) / 3;
+        try {
+          mlPred = await predictWithTF(mlInputs.slice(-windowSize));
+        } catch(e) {
+          console.warn('TF.js 多日预测失败，使用 ensemble fallback', e);
+        }
+        futurePredsML.push(mlPred);
+        mlInputs.push(mlPred);
+      }
       // 预测日期标签：取最后一条时间戳，生成未来多日标签
       const lastDate = new Date(timestamps[timestamps.length - 1] * 1000);
       const predictedDatesLabels = [];
@@ -303,12 +316,20 @@
         predictedDatesLabels.push(d.toLocaleDateString());
       }
       const predictedDateLabel = predictedDatesLabels[0];
+      // 多日滚动均线预测
+      const futurePredsMArolling = [];
+      let windowArrMA = lastCloses.slice();
+      for (let i = 1; i <= futureDays; i++) {
+        const maVal = windowArrMA.slice(-windowSize).reduce((a, b) => a + b, 0) / windowSize;
+        futurePredsMArolling.push(maVal);
+        windowArrMA.push(maVal);
+      }
       html += `<div class="info">数据范围：${new Date(timestamps[0] * 1000).toLocaleDateString()} - ${new Date(timestamps[timestamps.length - 1] * 1000).toLocaleDateString()}</div>`;
       if (method === 'ma' || method === 'all') {
         html += `<div class="method-card" data-method="ma">`;
-        // 多日 MA 预测
-        predictedDatesLabels.forEach(label => {
-          html += `<div class="prediction ${getUpDownClass(avg, lastPrice)}">${windowSize} 日均线预测 ${label} 收盘价：${avg.toFixed(2)} USD</div>`;
+        // 多日滚动 MA 预测
+        futurePredsMArolling.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">${windowSize} 日均线预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
         });
         // MA 详细演算
         html += `<details><summary>详细演算 (MA)</summary><ul>`;
@@ -445,7 +466,10 @@
       }
       if (method === 'ml' || method === 'all') {
         html += `<div class="method-card" data-method="ml">`;
-        html += `<div class="prediction ${getUpDownClass(predML, lastPrice)}">机器学习 (ML ensemble) 预测 ${predictedDateLabel} 收盘价：${predML.toFixed(2)} USD</div>`;
+        // 多日机器学习预测
+        futurePredsML.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">机器学习 (ML ensemble) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // ML 详细演算
         html += `<details><summary>详细演算 (ML 集成)</summary><p>MA = ${avg.toFixed(2)}, LR = ${predLR.toFixed(2)}, EMA = ${predEMA.toFixed(2)}</p><p>ML = (MA + LR + EMA)/3 = ${predML.toFixed(2)}</p></details>`;
         html += `</div>`;
@@ -515,7 +539,7 @@
       const labels = timestamps.map(ts => new Date(ts * 1000).toLocaleDateString());
       // Build datasets with prediction points
       const historicalData = closes;
-      const maPredictionData = Array(closes.length).fill(null).concat(Array(futureDays).fill(avg));
+      const maPredictionData = Array(closes.length).fill(null).concat(futurePredsMArolling);
       const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
       const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
       const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
@@ -523,6 +547,7 @@
       const maTrendPredictionData = Array(closes.length).fill(null).concat(futurePredsMAtrend);
       const arPredictionData = Array(closes.length).fill(null).concat(futurePredsAR);
       const arimaPredictionData = Array(closes.length).fill(null).concat(futurePredsARIMA);
+      const mlPredictionData = Array(closes.length).fill(null).concat(futurePredsML);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -554,7 +579,7 @@
         datasets.push({ label: 'ARIMA', data: arimaPredictionData, borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ml' || method === 'all') {
-        datasets.push({ label: '机器学习 (ML)', data: Array(closes.length).fill(null).concat([predML]), borderColor: '#000000', backgroundColor: '#000000', pointStyle: 'circle', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: '机器学习 (ML)', data: mlPredictionData, borderColor: '#000000', backgroundColor: '#000000', pointStyle: 'circle', pointRadius: 6, type: 'scatter', showLine: false });
       }
       // Destroy previous chart if exists
       if (chartInstance) chartInstance.destroy();
