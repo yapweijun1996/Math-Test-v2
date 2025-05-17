@@ -190,6 +190,11 @@
       const slope = num / den;
       const intercept = yMean - slope * xMean;
       const predLR = intercept + slope * n;
+      // 多日线性回归预测
+      const futurePredsLR = [];
+      for (let i = 1; i <= futureDays; i++) {
+        futurePredsLR.push(intercept + slope * (n + i - 1));
+      }
       // 计算指数加权移动平均 (EMA)
       const alpha = 2 / (n + 1);
       let emaValues = [ lastCloses[0] ];
@@ -327,7 +332,10 @@
       }
       if (method === 'lr' || method === 'all') {
         html += `<div class="method-card" data-method="lr">`;
-        html += `<div class="prediction ${getUpDownClass(predLR, lastPrice)}">线性回归 (${windowSize} 天) 预测 ${predictedDateLabel} 收盘价：${predLR.toFixed(2)} USD</div>`;
+        // 多日线性回归预测
+        futurePredsLR.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">线性回归 (${windowSize} 天) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // LR 详细演算
         html += `<details><summary>详细演算 (Linear Regression)</summary><table style="width:100%;border-collapse:collapse;"><tr><th>i</th><th>P_i</th><th>i - x̄</th><th>P_i - ȳ</th><th>(i-x̄)(P_i-ȳ)</th><th>(i-x̄)²</th></tr>`;
         for (let i = 0; i < n; i++) {
@@ -459,11 +467,10 @@
       // Build datasets with prediction points
       const historicalData = closes;
       const maPredictionData = Array(closes.length).fill(null).concat(Array(futureDays).fill(avg));
-      const lrPredictionData = Array(closes.length).fill(null).concat([predLR]);
+      const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
       const emaPredictionData = Array(closes.length).fill(null).concat([predEMA]);
-      const chartLabels = method === 'ma'
-        ? [...labels, ...predictedDatesLabels]
-        : [...labels, predictedDateLabel];
+      // 多日预测时使用全部预测日期标签
+      const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
       const datasets = [
         { label: '收盘价 (历史)', data: historicalData, borderColor: '#0077cc', fill: false, tension: 0.1 }
