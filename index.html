@@ -437,6 +437,7 @@
             <option value="ar">自回归模型 (AR)</option>
             <option value="arima">ARIMA</option>
             <option value="ml">机器学习 (Machine Learning)</option>
+            <option value="ridge">岭回归 (Ridge Regression)</option>
           </select>
         </div>
         <input type="hidden" id="start-date">
@@ -524,6 +525,31 @@
       const mse = errors.reduce((s, e) => s + e * e, 0) / count;
       const mae = errors.reduce((s, e) => s + Math.abs(e), 0) / count;
       return { mse, mae };
+    }
+
+    // 岭回归工具：计算截距和斜率（不正则化截距）
+    function getRidgeParams(arr, lambda) {
+      const n = arr.length;
+      let sumX = 0, sumY = 0, sumXX = 0, sumXY = 0;
+      for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += arr[i];
+        sumXX += i * i;
+        sumXY += i * arr[i];
+      }
+      // 矩阵元素
+      const m11 = n, m12 = sumX;
+      const m21 = sumX, m22 = sumXX + lambda;
+      const det = m11 * m22 - m12 * m21;
+      // 逆矩阵
+      const inv11 =  m22 / det;
+      const inv12 = -m12 / det;
+      const inv21 = -m21 / det;
+      const inv22 =  m11 / det;
+      // X^T y = [sumY, sumXY]
+      const a = inv11 * sumY + inv12 * sumXY; // intercept
+      const b = inv21 * sumY + inv22 * sumXY; // slope
+      return { a, b };
     }
 
     // TensorFlow.js 简单神经网络预测
@@ -661,6 +687,15 @@
       for (let i = 1; i <= futureDays; i++) {
         futurePredsLR.push(intercept + slope * (n + i - 1));
       }
+      // 岭回归 (Ridge Regression) 预测，捕捉过拟合与降低方差
+      const lambdaR = 0.5; // 正则化强度，可调整
+      const ridgeParams = getRidgeParams(lastCloses, lambdaR);
+      const predRidge = ridgeParams.a + ridgeParams.b * n;
+      // 多日岭回归预测
+      const futurePredsRidge = [];
+      for (let i = 1; i <= futureDays; i++) {
+        futurePredsRidge.push(ridgeParams.a + ridgeParams.b * (n + i - 1));
+      }
       // 霍尔特线性平滑 (Holt's Linear Method) 替代简单EMA，实现趋势预测
       const alphaH = 0.3; // 平滑因子
       const betaH = 0.1;  // 趋势平滑因子
@@ -793,7 +828,7 @@
         predictedDatesLabels.push(d.toLocaleDateString());
       }
       const predictedDateLabel = predictedDatesLabels[0];
-      // 多日滚动均线预测
+      // 多日滚动均线预测 (reinserted)
       const futurePredsMArolling = [];
       let windowArrMA = lastCloses.slice();
       for (let i = 1; i <= futureDays; i++) {
@@ -801,6 +836,11 @@
         futurePredsMArolling.push(maVal);
         windowArrMA.push(maVal);
       }
+      // 高亮当前方法卡片
+      document.querySelectorAll('.method-card').forEach(card => {
+        const m = card.dataset.method;
+        if (method === 'all' || method === m) card.classList.add('highlighted'); else card.classList.remove('highlighted');
+      });
       html += `<div class="info">数据范围：${new Date(timestamps[0] * 1000).toLocaleDateString()} - ${new Date(timestamps[timestamps.length - 1] * 1000).toLocaleDateString()}</div>`;
       if (method === 'ma' || method === 'all') {
         if (!html.includes('<!--pred-section-start-->')) html += '<!--pred-section-start--><div class="section-card"><h2>预测结果</h2>';
@@ -877,6 +917,20 @@
         html += `</div>`;
         const errsLR = calcError('lr');
         if (errsLR) html += `<div class="error-info">误差分析 (MSE: ${errsLR.mse.toFixed(2)}, MAE: ${errsLR.mae.toFixed(2)})</div>`;
+      }
+      if (method === 'ridge' || method === 'all') {
+        html += `<div class="method-card" data-method="ridge">`;
+        futurePredsRidge.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">岭回归 (Ridge λ=${lambdaR}) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
+        html += `<details><summary>详细演算 (Ridge Regression)</summary><p>λ = ${lambdaR}</p><p>截距 a = ${ridgeParams.a.toFixed(4)}, 斜率 b = ${ridgeParams.b.toFixed(4)}</p><p>预测公式: P_{n+i} = a + b·(n+i)</p></details>`;
+        html += `</div>`;
+        // 误差分析 Ridge
+        const errsRidge = rollingError(closes, windowSize, arr => {
+          const p = getRidgeParams(arr, lambdaR);
+          return p.a + p.b * arr.length;
+        });
+        if (errsRidge) html += `<div class="error-info">Ridge 误差 (MSE: ${errsRidge.mse.toFixed(2)}, MAE: ${errsRidge.mae.toFixed(2)})</div>`;
       }
       if (method === 'ema' || method === 'all') {
         html += `<div class="method-card" data-method="ema">`;
@@ -970,6 +1024,9 @@
       html += `   &nbsp;&nbsp;斜率 b = Σ(i - x̄)(P_i - ȳ) / Σ(i - x̄)²<br>`;
       html += `   &nbsp;&nbsp;截距 a = ȳ - b × x̄<br>`;
       html += `   &nbsp;&nbsp;预测 Pₙ₊₁ = a + b × N<br>`;
+      html += `• 岭回归 (Ridge Regression):<br>`;
+      html += `   &nbsp;&nbsp;β = (X^T X + λI)^{-1} X^T y;<br>`;
+      html += `   &nbsp;&nbsp;预测 Pₙ₊₁ = β₀ + β₁ × N;<br>`;
       html += `• 指数加权移动平均 (EMA):<br>`;
       html += `   &nbsp;&nbsp;使用霍尔特双指数平滑（含趋势分量）进行预测;<br>`;
       html += `   &nbsp;&nbsp;水平更新: L_t = α·P_t + (1−α)·(L_{t−1}+T_{t−1});<br>`;
@@ -1011,11 +1068,6 @@
         <p>预测 P₆ = a + b × 5 = 211.86 - 0.27 = 211.59</p>
       </div></div>`;
       resultDiv.innerHTML = html;
-      // 高亮当前方法卡片
-      document.querySelectorAll('.method-card').forEach(card => {
-        const m = card.dataset.method;
-        if (method === 'all' || method === m) card.classList.add('highlighted'); else card.classList.remove('highlighted');
-      });
       // Chart.js visualization
       const ctx = document.getElementById('stockChart').getContext('2d');
       // Prepare labels for all dates
@@ -1031,6 +1083,8 @@
       const arPredictionData = Array(closes.length).fill(null).concat(futurePredsAR);
       const arimaPredictionData = Array(closes.length).fill(null).concat(futurePredsARIMA);
       const mlPredictionData = Array(closes.length).fill(null).concat(futurePredsML);
+      // 岭回归预测数据
+      const ridgePredictionData = Array(closes.length).fill(null).concat(futurePredsRidge);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -1042,6 +1096,9 @@
       }
       if (method === 'lr' || method === 'all') {
         datasets.push({ label: '线性回归预测', data: lrPredictionData, borderColor: '#ff8800', backgroundColor: '#ff8800', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
+      if (method === 'ridge' || method === 'all') {
+        datasets.push({ label: '岭回归 (Ridge)', data: ridgePredictionData, borderColor: '#009688', backgroundColor: '#009688', pointRadius: 6, type: 'line', showLine: true, borderDash: [4,4] });
       }
       if (method === 'ema' || method === 'all') {
         datasets.push({ label: '指数加权移动平均 (EMA) 预测', data: emaPredictionData, borderColor: '#ff0000', backgroundColor: '#ff0000', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
