@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Yahoo Finance 股票预测 Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6fa; margin: 0; padding: 0; }
+    .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; }
+    h1 { text-align: center; }
+    button { padding: 8px 16px; font-size: 1rem; margin-top: 8px; }
+    .result { margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
+    th { background: #f0f0f0; }
+    .prediction { color: #007700; font-weight: bold; margin-top: 12px; }
+    .prediction.up { color: #008800; }
+    .prediction.down { color: #cc0000; }
+    .error { color: red; }
+    .info { font-size: 0.9rem; color: #888; margin-top: 8px; }
+    .algorithm { margin-top: 16px; background: #eef; padding: 12px; border-radius: 4px; font-size: 0.95rem; }
+    .error-info { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    /* 分组卡片 & 高亮 */
+    .method-card { border: 1px solid #ddd; padding: 8px 12px; margin-top: 12px; border-radius: 6px; background: #fafafa; }
+    .method-card.highlighted { border-color: #0077cc; background: #e6f0ff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Yahoo Finance 股票预测 Demo</h1>
+    <div>
+      <label for="symbol">股票代码：</label>
+      <input type="text" id="symbol" placeholder="AAPL">
+    </div>
+    <div>
+      <label for="window-size">窗口大小 (天)：</label>
+      <input type="number" id="window-size" min="1" max="365" value="30" style="width:60px;">
+    </div>
+    <div>
+      <label for="method">预测方法：</label>
+      <select id="method">
+        <option value="all">所有方法</option>
+        <option value="ma">N日均线</option>
+        <option value="lr">线性回归</option>
+        <option value="ema">指数加权移动平均 (EMA)</option>
+        <option value="poly">多项式回归 (Polynomial Regression)</option>
+        <option value="seasonal">季节性模型 (Seasonal Model)</option>
+        <option value="ma_trend">均线 + 趋势 (MA + Trend)</option>
+        <option value="ar">自回归模型 (AR)</option>
+        <option value="arima">ARIMA</option>
+        <option value="ml">机器学习 (Machine Learning)</option>
+      </select>
+    </div>
+    <!-- 开始日期自动计算，用户只需选择结束日期 -->
+    <input type="hidden" id="start-date">
+    <div>
+      <label for="end-date">结束日期：</label>
+      <input type="date" id="end-date">
+    </div>
+    <button onclick="fetchStock()">获取数据 (默认30日，可自定义)</button>
+    <div class="result" id="result"></div>
+    <div style="margin-top:24px;">
+      <canvas id="stockChart" width="400" height="220"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let chartInstance = null; // Chart.js instance reuse
+    // TensorFlow.js 简单神经网络预测
+    async function predictWithTF(lastCloses) {
+      const n = lastCloses.length;
+      const xs = tf.tensor2d(lastCloses.map((_, i) => [i]));
+      const ys = tf.tensor2d(lastCloses.map(v => [v]));
+      const model = tf.sequential();
+      model.add(tf.layers.dense({units: 10, activation: 'relu', inputShape: [1]}));
+      model.add(tf.layers.dense({units: 1}));
+      model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
+      await model.fit(xs, ys, {epochs: 50});
+      const predTensor = model.predict(tf.tensor2d([[n]]));
+      const pred = (await predTensor.array())[0][0];
+      tf.dispose([xs, ys, predTensor]);
+      model.dispose();
+      return pred;
+    }
+
+    // 判断涨跌颜色
+    function getUpDownClass(pred, last) {
+      if (pred > last) return 'up';
+      if (pred < last) return 'down';
+      return '';
+    }
+
+    // 更新开始日期 based on window-size and end-date
+    function updateStartDate() {
+      const windowSize = parseInt(document.getElementById('window-size').value, 10) || 30;
+      const endInput = document.getElementById('end-date');
+      const startInput = document.getElementById('start-date');
+      if (endInput.value) {
+        const endDate = new Date(endInput.value);
+        const startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - windowSize + 1);
+        const yyyy = startDate.getFullYear();
+        const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(startDate.getDate()).padStart(2, '0');
+        startInput.value = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    // On load set default end date and calculate start date
+    document.addEventListener('DOMContentLoaded', () => {
+      const endInput = document.getElementById('end-date');
+      const today = new Date();
+      endInput.valueAsDate = today;
+      updateStartDate();
+      document.getElementById('window-size').addEventListener('input', updateStartDate);
+      endInput.addEventListener('input', updateStartDate);
+    });
+
+    async function fetchStock() {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = "加载中...";
+      const symbolInput = document.getElementById('symbol').value.trim().toUpperCase();
+      const symbol = symbolInput || 'AAPL';
+      const startDate = document.getElementById('start-date').value;
+      const endDate = document.getElementById('end-date').value;
+      if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+        resultDiv.innerHTML = '<div class="error">错误：开始日期不能晚于结束日期。</div>';
+        return;
+      }
+      let url;
+      if (startDate && endDate) {
+        const period1 = Math.floor(new Date(startDate).getTime() / 1000);
+        const period2 = Math.floor(new Date(endDate).getTime() / 1000) + 86400;
+        url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${period1}&period2=${period2}&interval=1d`;
+      } else {
+        // 默认最近1个月数据（约30天）
+        url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1mo&interval=1d`;
+      }
+      try {
+        // use AllOrigins proxy to avoid CORS issues
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error("API 请求失败：" + res.status);
+        const data = await res.json();
+        const chart = data.chart.result[0];
+        const timestamps = chart.timestamp;
+        const closes = chart.indicators.quote[0].close;
+        await displayData(timestamps, closes);
+      } catch (e) {
+        console.error("Fetch failed", e);
+        // Display error to user, no static fallback
+        resultDiv.innerHTML = '<div class="error">数据获取失败，请检查网络连接或输入是否有效。</div>';
+        return;
+      }
+    }
+
+    async function displayData(timestamps, closes, isFallback = false) {
+      const resultDiv = document.getElementById('result');
+      const method = document.getElementById('method').value;
+      let html = `<div style="overflow-x:auto;"><table>
+        <tr><th>日期</th><th>收盘价 (USD)</th></tr>`;
+      for (let i = 0; i < timestamps.length; i++) {
+        const date = new Date(timestamps[i] * 1000).toLocaleDateString();
+        html += `<tr><td>${date}</td><td>${closes[i].toFixed(2)}</td></tr>`;
+      }
+      html += `</table></div>`;
+      // Use user-specified window size (default 30 days)
+      const windowInput = parseInt(document.getElementById('window-size').value, 10) || 30;
+      const windowSize = Math.min(windowInput, closes.length);
+      const lastCloses = closes.slice(-windowSize);
+      const avg = lastCloses.reduce((a, b) => a + b, 0) / windowSize;
+      const n = windowSize;
+      const lastPrice = lastCloses[n - 1];
+      // 计算简单线性回归预测基于最后 windowSize 天的数据
+      const xSum = (n - 1) * n / 2;
+      const xMean = xSum / n;
+      const yMean = avg;
+      let num = 0, den = 0;
+      for (let i = 0; i < n; i++) {
+        num += (i - xMean) * (lastCloses[i] - yMean);
+        den += (i - xMean) * (i - xMean);
+      }
+      const slope = num / den;
+      const intercept = yMean - slope * xMean;
+      const predLR = intercept + slope * n;
+      // 计算指数加权移动平均 (EMA)
+      const alpha = 2 / (n + 1);
+      let emaValues = [ lastCloses[0] ];
+      for (let i = 1; i < n; i++) {
+        emaValues.push(alpha * lastCloses[i] + (1 - alpha) * emaValues[i - 1]);
+      }
+      const predEMA = emaValues[n - 1];
+      // 计算多项式回归 (Polynomial Regression)
+      let SumY = 0, SumXY = 0, SumX2Y = 0, Sx0 = n, Sx1 = 0, Sx2 = 0, Sx3 = 0, Sx4 = 0;
+      for (let i = 0; i < n; i++) {
+        const x = i, y = lastCloses[i];
+        Sx1 += x; Sx2 += x*x; Sx3 += x*x*x; Sx4 += x*x*x*x;
+        SumY += y; SumXY += x*y; SumX2Y += x*x*y;
+      }
+      const M = [[Sx0, Sx1, Sx2], [Sx1, Sx2, Sx3], [Sx2, Sx3, Sx4]];
+      function det3(m) { return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1]) - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0]) + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]); }
+      const D = det3(M);
+      const Ma = [[SumY, Sx1, Sx2], [SumXY, Sx2, Sx3], [SumX2Y, Sx3, Sx4]];
+      const Mb = [[Sx0, SumY, Sx2], [Sx1, SumXY, Sx3], [Sx2, SumX2Y, Sx4]];
+      const Mc = [[Sx0, Sx1, SumY], [Sx1, Sx2, SumXY], [Sx2, Sx3, SumX2Y]];
+      const a_poly = det3(Ma)/D, b_poly = det3(Mb)/D, c_poly = det3(Mc)/D;
+      const predPoly = a_poly + b_poly * n + c_poly * n * n;
+      // 季节性模型 (Seasonal)
+      const predSeasonal = lastCloses[0];
+      // 均线 + 趋势 (MA + Trend)
+      const predMAtrend = (avg + predLR) / 2;
+      // 自回归模型 (AR1)
+      const m1 = n - 1;
+      let arSumX = 0, arSumY = 0;
+      for (let i = 0; i < m1; i++) {
+        arSumX += lastCloses[i];
+        arSumY += lastCloses[i+1];
+      }
+      const meanX1 = arSumX / m1, meanY1 = arSumY / m1;
+      let cov1 = 0, varX1 = 0;
+      for (let i = 0; i < m1; i++) {
+        cov1 += (lastCloses[i] - meanX1) * (lastCloses[i+1] - meanY1);
+        varX1 += (lastCloses[i] - meanX1) ** 2;
+      }
+      const a1 = cov1 / varX1;
+      const c1 = meanY1 - a1 * meanX1;
+      const predAR = c1 + a1 * lastCloses[n-1];
+      // ARIMA(1,1,0)
+      const diffs = [];
+      for (let i = 1; i < n; i++) diffs.push(lastCloses[i] - lastCloses[i-1]);
+      const m2 = diffs.length;
+      let ar2SumX = 0, ar2SumY = 0;
+      for (let i = 0; i < m2 - 1; i++) {
+        ar2SumX += diffs[i];
+        ar2SumY += diffs[i+1];
+      }
+      const meanX2 = ar2SumX / (m2 - 1), meanY2 = ar2SumY / (m2 - 1);
+      let cov2 = 0, varX2 = 0;
+      for (let i = 0; i < m2 - 1; i++) {
+        cov2 += (diffs[i] - meanX2) * (diffs[i+1] - meanY2);
+        varX2 += (diffs[i] - meanX2) ** 2;
+      }
+      const a2 = cov2 / varX2;
+      const c2 = meanY2 - a2 * meanX2;
+      const predDiff = c2 + a2 * diffs[m2 - 1];
+      const predARIMA = lastCloses[n-1] + predDiff;
+      // 机器学习 (ML) 预测：TensorFlow.js 神经网络
+      let predML = (avg + predLR + predEMA) / 3;
+      try {
+        predML = await predictWithTF(lastCloses);
+      } catch(e) {
+        console.warn('TF.js 预测失败，使用 ensemble fallback', e);
+      }
+      // 预测日期标签：取最后一条时间戳加一天
+      const lastDate = new Date(timestamps[timestamps.length - 1] * 1000);
+      const predictedDate = new Date(lastDate);
+      predictedDate.setDate(predictedDate.getDate() + 1);
+      const predictedDateLabel = predictedDate.toLocaleDateString();
+      html += `<div class="info">数据范围：${new Date(timestamps[0] * 1000).toLocaleDateString()} - ${new Date(timestamps[timestamps.length - 1] * 1000).toLocaleDateString()}</div>`;
+      if (method === 'ma' || method === 'all') {
+        html += `<div class="method-card" data-method="ma">`;
+        html += `<div class="prediction ${getUpDownClass(avg, lastPrice)}">${windowSize} 日均线预测 ${predictedDateLabel} 收盘价：${avg.toFixed(2)} USD</div>`;
+        // MA 详细演算
+        html += `<details><summary>详细演算 (MA)</summary><ul>`;
+        lastCloses.forEach((p,i) => html += `<li>P${i+1} = ${p.toFixed(2)}</li>`);
+        const sumP = lastCloses.reduce((a,b)=>a+b,0);
+        html += `<li>ΣP = ${sumP.toFixed(2)}</li>`;
+        html += `<li>平均 = ΣP/${n} = ${avg.toFixed(2)}</li>`;
+        html += `</ul></details>`;
+        html += `</div>`;
+        // 误差分析函数 (仅支持 MA, LR, EMA)
+        function computePredFor(methodName, arr) {
+          const n2 = arr.length;
+          const avg2 = arr.reduce((a,b)=>a+b,0)/n2;
+          if (methodName === 'ma') return avg2;
+          if (methodName === 'lr') {
+            const xSum2 = (n2 - 1) * n2 / 2;
+            const xMean2 = xSum2 / n2;
+            const yMean2 = avg2;
+            let num2 = 0, den2 = 0;
+            for (let i = 0; i < n2; i++) {
+              num2 += (i - xMean2) * (arr[i] - yMean2);
+              den2 += (i - xMean2) * (i - xMean2);
+            }
+            const b2 = num2 / den2;
+            const a2 = yMean2 - b2 * xMean2;
+            return a2 + b2 * n2;
+          }
+          if (methodName === 'ema') {
+            const alpha2 = 2 / (n2 + 1);
+            let ema2 = arr[0];
+            for (let i = 1; i < n2; i++) ema2 = alpha2 * arr[i] + (1 - alpha2) * ema2;
+            return ema2;
+          }
+          return null;
+        }
+        function calcError(methodName) {
+          const count = closes.length - windowSize;
+          if (count <= 0) return null;
+          let sumSq = 0, sumAbs = 0;
+          for (let i = windowSize; i < closes.length; i++) {
+            const arr = closes.slice(i - windowSize, i);
+            const pred = computePredFor(methodName, arr);
+            if (pred === null) return null;
+            const err = pred - closes[i];
+            sumSq += err * err;
+            sumAbs += Math.abs(err);
+          }
+          return { mse: sumSq / count, mae: sumAbs / count };
+        }
+        const errsMA = calcError('ma');
+        if (errsMA) html += `<div class="error-info">误差分析 (MSE: ${errsMA.mse.toFixed(2)}, MAE: ${errsMA.mae.toFixed(2)})</div>`;
+      }
+      if (method === 'lr' || method === 'all') {
+        html += `<div class="method-card" data-method="lr">`;
+        html += `<div class="prediction ${getUpDownClass(predLR, lastPrice)}">线性回归 (${windowSize} 天) 预测 ${predictedDateLabel} 收盘价：${predLR.toFixed(2)} USD</div>`;
+        // LR 详细演算
+        html += `<details><summary>详细演算 (Linear Regression)</summary><table style="width:100%;border-collapse:collapse;"><tr><th>i</th><th>P_i</th><th>i - x̄</th><th>P_i - ȳ</th><th>(i-x̄)(P_i-ȳ)</th><th>(i-x̄)²</th></tr>`;
+        for (let i = 0; i < n; i++) {
+          const xi = (i - xMean);
+          const yi = (lastCloses[i] - yMean);
+          html += `<tr><td>${i}</td><td>${lastCloses[i].toFixed(2)}</td><td>${xi.toFixed(2)}</td><td>${yi.toFixed(2)}</td><td>${(xi*yi).toFixed(2)}</td><td>${(xi*xi).toFixed(2)}</td></tr>`;
+        }
+        html += `</table><p>Σ(i-x̄)(P_i-ȳ) = ${num.toFixed(2)}, Σ(i-x̄)² = ${den.toFixed(2)}</p><p>斜率 b = ${slope.toFixed(4)}, 截距 a = ${intercept.toFixed(4)}</p></details>`;
+        html += `</div>`;
+        const errsLR = calcError('lr');
+        if (errsLR) html += `<div class="error-info">误差分析 (MSE: ${errsLR.mse.toFixed(2)}, MAE: ${errsLR.mae.toFixed(2)})</div>`;
+      }
+      if (method === 'ema' || method === 'all') {
+        html += `<div class="method-card" data-method="ema">`;
+        html += `<div class="prediction ${getUpDownClass(predEMA, lastPrice)}">指数加权移动平均 (EMA) 预测 ${predictedDateLabel} 收盘价：${predEMA.toFixed(2)} USD</div>`;
+        // EMA 详细演算
+        html += `<details><summary>详细演算 (EMA)</summary><p>α = ${alpha.toFixed(4)}</p><ul>`;
+        emaValues.forEach((v,i) => html += `<li>EMA_${i+1} = ${v.toFixed(2)}</li>`);
+        html += `</ul></details>`;
+        html += `</div>`;
+        const errsEMA = calcError('ema');
+        if (errsEMA) html += `<div class="error-info">误差分析 (MSE: ${errsEMA.mse.toFixed(2)}, MAE: ${errsEMA.mae.toFixed(2)})</div>`;
+      }
+      if (method === 'poly' || method === 'all') {
+        html += `<div class="method-card" data-method="poly">`;
+        html += `<div class="prediction ${getUpDownClass(predPoly, lastPrice)}">多项式回归 (Polynomial Regression) 预测 ${predictedDateLabel} 收盘价：${predPoly.toFixed(2)} USD</div>`;
+        // Poly 详细演算
+        html += `<details><summary>详细演算 (Polynomial Regression)</summary><p>a = ${a_poly.toFixed(4)}, b = ${b_poly.toFixed(4)}, c = ${c_poly.toFixed(4)}</p><p>预测 = a + b×N + c×N²</p></details>`;
+        html += `</div>`;
+      }
+      if (method === 'seasonal' || method === 'all') {
+        html += `<div class="method-card" data-method="seasonal">`;
+        html += `<div class="prediction ${getUpDownClass(predSeasonal, lastPrice)}">季节性模型 (Seasonal) 预测 ${predictedDateLabel} 收盘价：${predSeasonal.toFixed(2)} USD</div>`;
+        // Seasonal 详细演算
+        html += `<details><summary>详细演算 (季节性模型)</summary><p>使用 P₁ = ${lastCloses[0].toFixed(2)} 作为预测值</p></details>`;
+        html += `</div>`;
+      }
+      if (method === 'ma_trend' || method === 'all') {
+        html += `<div class="method-card" data-method="ma_trend">`;
+        html += `<div class="prediction ${getUpDownClass(predMAtrend, lastPrice)}">均线+趋势 (MA+Trend) 预测 ${predictedDateLabel} 收盘价：${predMAtrend.toFixed(2)} USD</div>`;
+        // MA+Trend 详细演算
+        html += `<details><summary>详细演算 (MA+Trend)</summary><p>Avg = ${avg.toFixed(2)}, LR 预测 = ${predLR.toFixed(2)}, (Avg + LR)/2 = ${predMAtrend.toFixed(2)}</p></details>`;
+        html += `</div>`;
+      }
+      if (method === 'ar' || method === 'all') {
+        html += `<div class="method-card" data-method="ar">`;
+        html += `<div class="prediction ${getUpDownClass(predAR, lastPrice)}">自回归 (AR) 预测 ${predictedDateLabel} 收盘价：${predAR.toFixed(2)} USD</div>`;
+        // AR 详细演算
+        html += `<details><summary>详细演算 (AR1)</summary><p>a₁ = ${a1.toFixed(4)}, c₁ = ${c1.toFixed(2)}, 预测 = c₁ + a₁×Pₙ = ${predAR.toFixed(2)}</p></details>`;
+        html += `</div>`;
+      }
+      if (method === 'arima' || method === 'all') {
+        html += `<div class="method-card" data-method="arima">`;
+        html += `<div class="prediction ${getUpDownClass(predARIMA, lastPrice)}">ARIMA(1,1,0) 预测 ${predictedDateLabel} 收盘价：${predARIMA.toFixed(2)} USD</div>`;
+        // ARIMA 详细演算
+        html += `<details><summary>详细演算 (ARIMA)</summary><p>a₂ = ${a2.toFixed(4)}, c₂ = ${c2.toFixed(4)}, 差分预测 = ${predDiff.toFixed(2)}, 预测 = Pₙ + 差分 = ${predARIMA.toFixed(2)}</p></details>`;
+        html += `</div>`;
+      }
+      if (method === 'ml' || method === 'all') {
+        html += `<div class="method-card" data-method="ml">`;
+        html += `<div class="prediction ${getUpDownClass(predML, lastPrice)}">机器学习 (ML ensemble) 预测 ${predictedDateLabel} 收盘价：${predML.toFixed(2)} USD</div>`;
+        // ML 详细演算
+        html += `<details><summary>详细演算 (ML 集成)</summary><p>MA = ${avg.toFixed(2)}, LR = ${predLR.toFixed(2)}, EMA = ${predEMA.toFixed(2)}</p><p>ML = (MA + LR + EMA)/3 = ${predML.toFixed(2)}</p></details>`;
+        html += `</div>`;
+      }
+      if (isFallback) {
+        html += `<div class="info">* 使用静态示例数据演示，无需 API Key 或代理。</div>`;
+      } else {
+        html += `<div class="info">* 使用 Yahoo Finance 公开 API 获取实时数据。</div>`;
+      }
+      html += `<div class="algorithm"><strong>算法说明：</strong><br>
+        • N日均线 (Moving Average) = (P₁ + P₂ + ... + P_N) / N<br>
+        • 简单线性回归 (Linear Regression):<br>
+           &nbsp;&nbsp;斜率 b = Σ(i - x̄)(P_i - ȳ) / Σ(i - x̄)²<br>
+           &nbsp;&nbsp;截距 a = ȳ - b × x̄<br>
+           &nbsp;&nbsp;预测 Pₙ₊₁ = a + b × N<br>
+        • 指数加权移动平均 (EMA):<br>
+           &nbsp;&nbsp;α = 2/(N+1)<br>
+           &nbsp;&nbsp;EMA₁ = P₁; EMAₜ = α×Pₜ + (1−α)×EMAₜ₋₁;<br>
+           &nbsp;&nbsp;预测 Pₙ₊₁ ≈ EMA_N;<br>
+        • 多项式回归 (Polynomial Regression):<br>
+           &nbsp;&nbsp;Fit y = a + b·x + c·x² via least squares;<br>
+           &nbsp;&nbsp;预测 Pₙ₊₁ ≈ a + b·N + c·N²;<br>
+        • 简单季节性模型 (Seasonal):<br>
+           &nbsp;&nbsp;If period = N, 预测用 P₁;<br>
+        • 均线 + 趋势 (MA + Trend):<br>
+           &nbsp;&nbsp;Avg = MA; Trend = LR; 预测 = (Avg + Trend预测)/2;<br>
+        • 自回归 (AR(p)):<br>
+           &nbsp;&nbsp;Pₜ₊₁ = c + Σ_{i=1..p} a_i P_{t-i+1};<br>
+        • ARIMA(p,d,q):<br>
+           &nbsp;&nbsp;(复杂模型, 涉及差分和MA);<br>
+        • 机器学习 (ML):<br>
+           &nbsp;&nbsp;如决策树、神经网络等;<br>
+        <br><code>// windowSize = N; slope = num/den; intercept = yMean - slope*xMean; predLR = intercept + slope*windowSize;  // EMA: α=2/(N+1); predEMA=last EMA value</code>
+       </div>`;
+      // Add detailed calculation walkthrough example
+      html += `<div class="detail" style="margin-top:16px; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
+        <h3>计算演示 (示例数据)</h3>
+        <h4>5日均线计算过程：</h4>
+        <ul>
+          <li>P₁=210.79, P₂=212.93, P₃=212.33, P₄=211.45, P₅=211.26</li>
+          <li>ΣP_i = 1058.76</li>
+          <li>平均值 = 1058.76 / 5 = 211.75</li>
+        </ul>
+        <h4>线性回归计算过程：</h4>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr><th>i</th><th>P_i</th><th>i - x̄</th><th>P_i - ȳ</th><th>(i - x̄)(P_i - ȳ)</th><th>(i - x̄)²</th></tr>
+          <tr><td>0</td><td>210.79</td><td>-2</td><td>-0.96</td><td>1.92</td><td>4</td></tr>
+          <tr><td>1</td><td>212.93</td><td>-1</td><td>1.18</td><td>-1.18</td><td>1</td></tr>
+          <tr><td>2</td><td>212.33</td><td>0</td><td>0.58</td><td>0</td><td>0</td></tr>
+          <tr><td>3</td><td>211.45</td><td>1</td><td>-0.30</td><td>-0.30</td><td>1</td></tr>
+          <tr><td>4</td><td>211.26</td><td>2</td><td>-0.49</td><td>-0.98</td><td>4</td></tr>
+        </table>
+        <p>Σ(i - x̄)(P_i - ȳ) = -0.54, Σ(i - x̄)² = 10</p>
+        <p>斜率 b = -0.54 / 10 = -0.054</p>
+        <p>截距 a = ȳ - b × x̄ = 211.75 + 0.054 × 2 = 211.86</p>
+        <p>预测 P₆ = a + b × 5 = 211.86 - 0.27 = 211.59</p>
+      </div>`;
+      resultDiv.innerHTML = html;
+      // 高亮当前方法卡片
+      document.querySelectorAll('.method-card').forEach(card => {
+        const m = card.dataset.method;
+        if (method === 'all' || method === m) card.classList.add('highlighted'); else card.classList.remove('highlighted');
+      });
+      // Chart.js visualization
+      const ctx = document.getElementById('stockChart').getContext('2d');
+      // Prepare labels for all dates
+      const labels = timestamps.map(ts => new Date(ts * 1000).toLocaleDateString());
+      // Build datasets with prediction points
+      const historicalData = closes;
+      const maPredictionData = Array(closes.length).fill(null).concat([avg]);
+      const lrPredictionData = Array(closes.length).fill(null).concat([predLR]);
+      const emaPredictionData = Array(closes.length).fill(null).concat([predEMA]);
+      const chartLabels = [...labels, predictedDateLabel];
+      // Build chart datasets based on selected method
+      const datasets = [
+        { label: '收盘价 (历史)', data: historicalData, borderColor: '#0077cc', fill: false, tension: 0.1 }
+      ];
+      if (method === 'ma' || method === 'all') {
+        datasets.push({ label: '5日均线预测', data: maPredictionData, borderColor: '#00bb00', backgroundColor: '#00bb00', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'lr' || method === 'all') {
+        datasets.push({ label: '线性回归预测', data: lrPredictionData, borderColor: '#ff8800', backgroundColor: '#ff8800', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'ema' || method === 'all') {
+        datasets.push({ label: '指数加权移动平均 (EMA) 预测', data: emaPredictionData, borderColor: '#ff0000', backgroundColor: '#ff0000', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'poly' || method === 'all') {
+        datasets.push({ label: '多项式回归 (Polynomial)', data: Array(closes.length).fill(null).concat([predPoly]), borderColor: '#cc0077', backgroundColor: '#cc0077', pointStyle: 'triangle', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'seasonal' || method === 'all') {
+        datasets.push({ label: '季节性 (Seasonal)', data: Array(closes.length).fill(null).concat([predSeasonal]), borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'ma_trend' || method === 'all') {
+        datasets.push({ label: '均线+趋势 (MA+Trend)', data: Array(closes.length).fill(null).concat([predMAtrend]), borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'ar' || method === 'all') {
+        datasets.push({ label: '自回归 (AR)', data: Array(closes.length).fill(null).concat([predAR]), borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'arima' || method === 'all') {
+        datasets.push({ label: 'ARIMA', data: Array(closes.length).fill(null).concat([predARIMA]), borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      if (method === 'ml' || method === 'all') {
+        datasets.push({ label: '机器学习 (ML)', data: Array(closes.length).fill(null).concat([predML]), borderColor: '#000000', backgroundColor: '#000000', pointStyle: 'circle', pointRadius: 6, type: 'scatter', showLine: false });
+      }
+      // Destroy previous chart if exists
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: chartLabels,
+          datasets: datasets
+        },
+        options: { plugins: { legend: { display: true }, tooltip: { enabled: true } }, scales: { x: { title: { display: true, text: '日期' } }, y: { title: { display: true, text: '收盘价 (USD)' } } } }
+      });
+    }
+  </script>
+</body>
+</html> 
