@@ -231,6 +231,8 @@
       const futurePredsSeasonal = Array(futureDays).fill(predSeasonal);
       // 均线 + 趋势 (MA + Trend)
       const predMAtrend = (avg + predLR) / 2;
+      // 多日MA+趋势预测
+      const futurePredsMAtrend = Array(futureDays).fill(predMAtrend);
       // 自回归模型 (AR1)
       const m1 = n - 1;
       let arSumX = 0, arSumY = 0;
@@ -394,7 +396,10 @@
       }
       if (method === 'ma_trend' || method === 'all') {
         html += `<div class="method-card" data-method="ma_trend">`;
-        html += `<div class="prediction ${getUpDownClass(predMAtrend, lastPrice)}">均线+趋势 (MA+Trend) 预测 ${predictedDateLabel} 收盘价：${predMAtrend.toFixed(2)} USD</div>`;
+        // 多日MA+趋势预测
+        futurePredsMAtrend.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">均线+趋势 (MA+Trend) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // MA+Trend 详细演算
         html += `<details><summary>详细演算 (MA+Trend)</summary><p>Avg = ${avg.toFixed(2)}, LR 预测 = ${predLR.toFixed(2)}, (Avg + LR)/2 = ${predMAtrend.toFixed(2)}</p></details>`;
         html += `</div>`;
@@ -490,6 +495,7 @@
       const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
       const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
       const seasonalPredictionData = Array(closes.length).fill(null).concat(futurePredsSeasonal);
+      const maTrendPredictionData = Array(closes.length).fill(null).concat(futurePredsMAtrend);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -512,7 +518,7 @@
         datasets.push({ label: '季节性 (Seasonal)', data: seasonalPredictionData, borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ma_trend' || method === 'all') {
-        datasets.push({ label: '均线+趋势 (MA+Trend)', data: Array(closes.length).fill(null).concat([predMAtrend]), borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: '均线+趋势 (MA+Trend)', data: maTrendPredictionData, borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ar' || method === 'all') {
         datasets.push({ label: '自回归 (AR)', data: Array(closes.length).fill(null).concat([predAR]), borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'scatter', showLine: false });
