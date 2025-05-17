@@ -202,6 +202,8 @@
         emaValues.push(alpha * lastCloses[i] + (1 - alpha) * emaValues[i - 1]);
       }
       const predEMA = emaValues[n - 1];
+      // 多日EMA预测
+      const futurePredsEMA = Array(futureDays).fill(predEMA);
       // 计算多项式回归 (Polynomial Regression)
       let SumY = 0, SumXY = 0, SumX2Y = 0, Sx0 = n, Sx1 = 0, Sx2 = 0, Sx3 = 0, Sx4 = 0;
       for (let i = 0; i < n; i++) {
@@ -350,7 +352,10 @@
       }
       if (method === 'ema' || method === 'all') {
         html += `<div class="method-card" data-method="ema">`;
-        html += `<div class="prediction ${getUpDownClass(predEMA, lastPrice)}">指数加权移动平均 (EMA) 预测 ${predictedDateLabel} 收盘价：${predEMA.toFixed(2)} USD</div>`;
+        // 多日EMA预测
+        futurePredsEMA.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">指数加权移动平均 (EMA) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // EMA 详细演算
         html += `<details><summary>详细演算 (EMA)</summary><p>α = ${alpha.toFixed(4)}</p><ul>`;
         emaValues.forEach((v,i) => html += `<li>EMA_${i+1} = ${v.toFixed(2)}</li>`);
@@ -468,7 +473,7 @@
       const historicalData = closes;
       const maPredictionData = Array(closes.length).fill(null).concat(Array(futureDays).fill(avg));
       const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
-      const emaPredictionData = Array(closes.length).fill(null).concat([predEMA]);
+      const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
