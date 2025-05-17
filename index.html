@@ -36,6 +36,65 @@
       table th, table td { padding: 8px; font-size: 0.8rem; }
       .prediction { font-size: 0.9rem; }
     }
+    /* Responsive form layout */
+    .container > div:nth-child(-n+4) {
+      display: inline-block;
+      vertical-align: top;
+      width: calc(50% - 12px);
+      box-sizing: border-box;
+      margin-right: 12px;
+    }
+    .container > div:nth-child(-n+4):nth-child(2n) {
+      margin-right: 0;
+    }
+    @media (max-width: 767px) {
+      .container > div:nth-child(-n+4) {
+        width: 100%;
+        margin-right: 0;
+      }
+    }
+    /* Method cards grid on desktop */
+    @media (min-width: 768px) {
+      .method-card {
+        display: inline-block;
+        width: calc(50% - 16px);
+        margin: 8px;
+        vertical-align: top;
+      }
+      .chart-container {
+        height: 400px;
+      }
+    }
+    /* General hover/active effects */
+    .method-card {
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .method-card:hover {
+      background: #f9f9f9;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    /* Table responsiveness */
+    .result {
+      overflow-x: auto;
+    }
+    .result table {
+      width: 100%;
+      border-spacing: 0;
+    }
+    /* Details styling for mobile */
+    details > summary {
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    @media (max-width: 480px) {
+      summary {
+        font-size: 0.95rem;
+      }
+      .prediction {
+        font-size: 0.9rem;
+      }
+    }
   </style>
 </head>
 <body>
