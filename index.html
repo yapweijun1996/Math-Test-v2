@@ -249,6 +249,14 @@
       const a1 = cov1 / varX1;
       const c1 = meanY1 - a1 * meanX1;
       const predAR = c1 + a1 * lastCloses[n-1];
+      // 多日自回归 (AR1) 预测
+      const futurePredsAR = [];
+      let prevAR = lastCloses[n-1];
+      for (let i = 1; i <= futureDays; i++) {
+        const arPred = c1 + a1 * prevAR;
+        futurePredsAR.push(arPred);
+        prevAR = arPred;
+      }
       // ARIMA(1,1,0)
       const diffs = [];
       for (let i = 1; i < n; i++) diffs.push(lastCloses[i] - lastCloses[i-1]);
@@ -406,7 +414,10 @@
       }
       if (method === 'ar' || method === 'all') {
         html += `<div class="method-card" data-method="ar">`;
-        html += `<div class="prediction ${getUpDownClass(predAR, lastPrice)}">自回归 (AR) 预测 ${predictedDateLabel} 收盘价：${predAR.toFixed(2)} USD</div>`;
+        // 多日自回归预测
+        futurePredsAR.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">自回归 (AR) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // AR 详细演算
         html += `<details><summary>详细演算 (AR1)</summary><p>a₁ = ${a1.toFixed(4)}, c₁ = ${c1.toFixed(2)}, 预测 = c₁ + a₁×Pₙ = ${predAR.toFixed(2)}</p></details>`;
         html += `</div>`;
@@ -496,6 +507,7 @@
       const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
       const seasonalPredictionData = Array(closes.length).fill(null).concat(futurePredsSeasonal);
       const maTrendPredictionData = Array(closes.length).fill(null).concat(futurePredsMAtrend);
+      const arPredictionData = Array(closes.length).fill(null).concat(futurePredsAR);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -521,7 +533,7 @@
         datasets.push({ label: '均线+趋势 (MA+Trend)', data: maTrendPredictionData, borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ar' || method === 'all') {
-        datasets.push({ label: '自回归 (AR)', data: Array(closes.length).fill(null).concat([predAR]), borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: '自回归 (AR)', data: arPredictionData, borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'arima' || method === 'all') {
         datasets.push({ label: 'ARIMA', data: Array(closes.length).fill(null).concat([predARIMA]), borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'scatter', showLine: false });
