@@ -432,7 +432,6 @@
             <option value="lr">线性回归</option>
             <option value="ema">指数加权移动平均 (EMA)</option>
             <option value="poly">多项式回归 (Polynomial Regression)</option>
-            <option value="poly_ridge">多项式岭回归 (Polynomial Ridge Regression)</option>
             <option value="seasonal">季节性模型 (Seasonal Model)</option>
             <option value="ma_trend">均线 + 趋势 (MA + Trend)</option>
             <option value="ar">自回归模型 (AR)</option>
@@ -551,45 +550,6 @@
       const a = inv11 * sumY + inv12 * sumXY; // intercept
       const b = inv21 * sumY + inv22 * sumXY; // slope
       return { a, b };
-    }
-
-    // 多项式岭回归工具：计算二次多项式正则化系数
-    function getPolyRidgeParams(arr, lambda) {
-      const n = arr.length;
-      let S0 = n, S1 = 0, S2 = 0, S3 = 0, S4 = 0;
-      let V0 = 0, V1 = 0, V2 = 0;
-      for (let i = 0; i < n; i++) {
-        S1 += i; S2 += i*i; S3 += i*i*i; S4 += i*i*i*i;
-        V0 += arr[i]; V1 += i * arr[i]; V2 += i*i * arr[i];
-      }
-      // 构造正则化后 M 矩阵
-      const M = [
-        [S0 + lambda, S1,          S2      ],
-        [S1,          S2 + lambda, S3      ],
-        [S2,          S3,          S4 + lambda]
-      ];
-      // 行列式
-      function det3(m) { return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1]) - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0]) + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]); }
-      const D = det3(M);
-      // 伴随矩阵
-      const adj = [
-        [ (M[1][1]*M[2][2] - M[1][2]*M[2][1]), -(M[0][1]*M[2][2] - M[0][2]*M[2][1]),  (M[0][1]*M[1][2] - M[0][2]*M[1][1]) ],
-        [-(M[1][0]*M[2][2] - M[1][2]*M[2][0]),  (M[0][0]*M[2][2] - M[0][2]*M[2][0]), -(M[0][0]*M[1][2] - M[0][2]*M[1][0])],
-        [ (M[1][0]*M[2][1] - M[1][1]*M[2][0]), -(M[0][0]*M[2][1] - M[0][1]*M[2][0]),  (M[0][0]*M[1][1] - M[0][1]*M[1][0]) ]
-      ];
-      // 计算系数向量 β = adj(M)/D * V
-      const a = (adj[0][0]*V0 + adj[0][1]*V1 + adj[0][2]*V2) / D;
-      const b = (adj[1][0]*V0 + adj[1][1]*V1 + adj[1][2]*V2) / D;
-      const c = (adj[2][0]*V0 + adj[2][1]*V1 + adj[2][2]*V2) / D;
-      return {a, b, c};
-    }
-
-    // 多项式岭回归预测函数：返回 h 步预测
-    function forecastPolyRidge(arr, lambda, h) {
-      const {a, b, c} = getPolyRidgeParams(arr, lambda);
-      const n = arr.length;
-      const x = n + h - 1;
-      return a + b * x + c * x * x;
     }
 
     // TensorFlow.js 简单神经网络预测
@@ -777,12 +737,6 @@
         const x = n + i - 1;
         futurePredsPoly.push(a_poly + b_poly * x + c_poly * x * x);
       }
-      // 多项式岭回归多日预测
-      const lambdaPR = 0.5; // 正则化强度，可调整
-      const futurePredsPolyRidge = [];
-      for (let i = 1; i <= futureDays; i++) {
-        futurePredsPolyRidge.push(forecastPolyRidge(lastCloses, lambdaPR, i));
-      }
       // 季节性模型 (Seasonal)
       const predSeasonal = lastCloses[0];
       // 多日季节性预测
@@ -874,6 +828,14 @@
         predictedDatesLabels.push(d.toLocaleDateString());
       }
       const predictedDateLabel = predictedDatesLabels[0];
+      // 多日滚动均线预测 (reinserted)
+      const futurePredsMArolling = [];
+      let windowArrMA = lastCloses.slice();
+      for (let i = 1; i <= futureDays; i++) {
+        const maVal = windowArrMA.slice(-windowSize).reduce((a, b) => a + b, 0) / windowSize;
+        futurePredsMArolling.push(maVal);
+        windowArrMA.push(maVal);
+      }
       // 高亮当前方法卡片
       document.querySelectorAll('.method-card').forEach(card => {
         const m = card.dataset.method;
@@ -989,20 +951,6 @@
         // Poly 详细演算
         html += `<details><summary>详细演算 (Polynomial Regression)</summary><p>a = ${a_poly.toFixed(4)}, b = ${b_poly.toFixed(4)}, c = ${c_poly.toFixed(4)}</p><p>预测 = a + b·N + c·N²</p></details>`;
         html += `</div>`;
-      }
-      if (method === 'poly_ridge' || method === 'all') {
-        html += `<div class="method-card" data-method="poly_ridge">`;
-        // 多日多项式岭回归预测
-        futurePredsPolyRidge.forEach((pred, idx) => {
-          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">多项式岭回归 (λ=${lambdaPR}) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
-        });
-        // Polynomial Ridge 详细演算
-        const pr = getPolyRidgeParams(lastCloses, lambdaPR);
-        html += `<details><summary>详细演算 (Polynomial Ridge)</summary><p>λ = ${lambdaPR}</p><p>a = ${pr.a.toFixed(4)}, b = ${pr.b.toFixed(4)}, c = ${pr.c.toFixed(4)}</p><p>预测公式: P_{n+h} = a + b·(n+h-1) + c·(n+h-1)²</p></details>`;
-        html += `</div>`;
-        // Poly Ridge 误差
-        const errsPR = rollingError(closes, windowSize, arr => forecastPolyRidge(arr, lambdaPR, 1));
-        if (errsPR) html += `<div class="error-info">Poly Ridge 误差 (MSE: ${errsPR.mse.toFixed(2)}, MAE: ${errsPR.mae.toFixed(2)})</div>`;
       }
       if (method === 'seasonal' || method === 'all') {
         html += `<div class="method-card" data-method="seasonal">`;
@@ -1130,7 +1078,6 @@
       const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
       const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
       const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
-      const polyRidgePredictionData = Array(closes.length).fill(null).concat(futurePredsPolyRidge);
       const seasonalPredictionData = Array(closes.length).fill(null).concat(futurePredsSeasonal);
       const maTrendPredictionData = Array(closes.length).fill(null).concat(futurePredsMAtrend);
       const arPredictionData = Array(closes.length).fill(null).concat(futurePredsAR);
@@ -1159,10 +1106,21 @@
       if (method === 'poly' || method === 'all') {
         datasets.push({ label: '多项式回归 (Polynomial)', data: polyPredictionData, borderColor: '#cc0077', backgroundColor: '#cc0077', pointStyle: 'triangle', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
       }
-      if (method === 'poly_ridge' || method === 'all') {
-        datasets.push({ label: '多项式岭回归 (Polynomial Ridge)', data: polyRidgePredictionData, borderColor: '#8800aa', backgroundColor: '#8800aa', pointStyle: 'rectRot', pointRadius: 6, type: 'line', showLine: true, borderDash: [4,2] });
-      }
       if (method === 'seasonal' || method === 'all') {
+        datasets.push({ label: '季节性 (Seasonal)', data: seasonalPredictionData, borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
+      if (method === 'ma_trend' || method === 'all') {
+        datasets.push({ label: '均线+趋势 (MA+Trend)', data: maTrendPredictionData, borderColor: '#00cccc', backgroundColor: '#00cccc', pointStyle: 'rectRot', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
+      if (method === 'ar' || method === 'all') {
+        datasets.push({ label: '自回归 (AR)', data: arPredictionData, borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
+      if (method === 'arima' || method === 'all') {
+        datasets.push({ label: 'ARIMA', data: arimaPredictionData, borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
+      if (method === 'ml' || method === 'all') {
+        datasets.push({ label: '机器学习 (ML)', data: mlPredictionData, borderColor: '#000000', backgroundColor: '#000000', pointStyle: 'circle', pointRadius: 6, type: 'line', showLine: true, borderDash: [6,4] });
+      }
       // Destroy previous chart if exists
       if (chartInstance) chartInstance.destroy();
       chartInstance = new Chart(ctx, {
