@@ -144,45 +144,85 @@
       top: 0;
       z-index: 2;
     }
+    /* Form area improvements */
+    .form-section {
+      margin-bottom: 18px;
+    }
+    .form-section h2 {
+      font-size: 1.2rem;
+      margin: 0 0 12px 0;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 4px;
+    }
+    @media (min-width: 992px) {
+      .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-end;
+      }
+      .form-row > div {
+        flex: 1 1 180px;
+        min-width: 140px;
+        margin-bottom: 0;
+      }
+      .form-row > div:last-child {
+        flex: 0 0 auto;
+      }
+      .form-row button {
+        margin-top: 0;
+      }
+    }
+    @media (max-width: 991px) {
+      .form-row > div {
+        margin-bottom: 10px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Yahoo Finance 股票预测 Demo</h1>
-    <div>
-      <label for="symbol">股票代码：</label>
-      <input type="text" id="symbol" placeholder="AAPL">
+    <div class="form-section">
+      <h2>参数设置</h2>
+      <form class="form-row" onsubmit="fetchStock(); return false;">
+        <div>
+          <label for="symbol">股票代码：</label>
+          <input type="text" id="symbol" placeholder="AAPL">
+        </div>
+        <div>
+          <label for="window-size">窗口大小 (天)：</label>
+          <input type="number" id="window-size" min="1" max="365" value="30" style="width:60px;">
+        </div>
+        <div>
+          <label for="method">预测方法：</label>
+          <select id="method">
+            <option value="all">所有方法</option>
+            <option value="ma">N日均线</option>
+            <option value="lr">线性回归</option>
+            <option value="ema">指数加权移动平均 (EMA)</option>
+            <option value="poly">多项式回归 (Polynomial Regression)</option>
+            <option value="seasonal">季节性模型 (Seasonal Model)</option>
+            <option value="ma_trend">均线 + 趋势 (MA + Trend)</option>
+            <option value="ar">自回归模型 (AR)</option>
+            <option value="arima">ARIMA</option>
+            <option value="ml">机器学习 (Machine Learning)</option>
+          </select>
+        </div>
+        <input type="hidden" id="start-date">
+        <div>
+          <label for="end-date">结束日期：</label>
+          <input type="date" id="end-date">
+        </div>
+        <div>
+          <label for="future-days">预测天数：</label>
+          <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;">
+        </div>
+        <div>
+          <button type="submit">获取数据 (默认30日, 可自定义)</button>
+        </div>
+      </form>
     </div>
-    <div>
-      <label for="window-size">窗口大小 (天)：</label>
-      <input type="number" id="window-size" min="1" max="365" value="30" style="width:60px;">
-    </div>
-    <div>
-      <label for="method">预测方法：</label>
-      <select id="method">
-        <option value="all">所有方法</option>
-        <option value="ma">N日均线</option>
-        <option value="lr">线性回归</option>
-        <option value="ema">指数加权移动平均 (EMA)</option>
-        <option value="poly">多项式回归 (Polynomial Regression)</option>
-        <option value="seasonal">季节性模型 (Seasonal Model)</option>
-        <option value="ma_trend">均线 + 趋势 (MA + Trend)</option>
-        <option value="ar">自回归模型 (AR)</option>
-        <option value="arima">ARIMA</option>
-        <option value="ml">机器学习 (Machine Learning)</option>
-      </select>
-    </div>
-    <!-- 开始日期自动计算，用户只需选择结束日期 -->
-    <input type="hidden" id="start-date">
-    <div>
-      <label for="end-date">结束日期：</label>
-      <input type="date" id="end-date">
-    </div>
-    <div>
-      <label for="future-days">预测天数：</label>
-      <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;">
-    </div>
-    <button onclick="fetchStock()">获取数据 (默认30日，可自定义)</button>
     <div class="content-grid">
       <div class="controls-panel">
         <div class="result" id="result"></div>
