@@ -57,6 +57,10 @@
       <label for="end-date">结束日期：</label>
       <input type="date" id="end-date">
     </div>
+    <div>
+      <label for="future-days">预测天数：</label>
+      <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;">
+    </div>
     <button onclick="fetchStock()">获取数据 (默认30日，可自定义)</button>
     <div class="result" id="result"></div>
     <div style="margin-top:24px;">
@@ -159,6 +163,7 @@
     async function displayData(timestamps, closes, isFallback = false) {
       const resultDiv = document.getElementById('result');
       const method = document.getElementById('method').value;
+      const futureDays = parseInt(document.getElementById('future-days').value, 10) || 1;
       let html = `<div style="overflow-x:auto;"><table>
         <tr><th>日期</th><th>收盘价 (USD)</th></tr>`;
       for (let i = 0; i < timestamps.length; i++) {
@@ -253,15 +258,22 @@
       } catch(e) {
         console.warn('TF.js 预测失败，使用 ensemble fallback', e);
       }
-      // 预测日期标签：取最后一条时间戳加一天
+      // 预测日期标签：取最后一条时间戳，生成未来多日标签
       const lastDate = new Date(timestamps[timestamps.length - 1] * 1000);
-      const predictedDate = new Date(lastDate);
-      predictedDate.setDate(predictedDate.getDate() + 1);
-      const predictedDateLabel = predictedDate.toLocaleDateString();
+      const predictedDatesLabels = [];
+      for (let i = 1; i <= futureDays; i++) {
+        const d = new Date(lastDate);
+        d.setDate(lastDate.getDate() + i);
+        predictedDatesLabels.push(d.toLocaleDateString());
+      }
+      const predictedDateLabel = predictedDatesLabels[0];
       html += `<div class="info">数据范围：${new Date(timestamps[0] * 1000).toLocaleDateString()} - ${new Date(timestamps[timestamps.length - 1] * 1000).toLocaleDateString()}</div>`;
       if (method === 'ma' || method === 'all') {
         html += `<div class="method-card" data-method="ma">`;
-        html += `<div class="prediction ${getUpDownClass(avg, lastPrice)}">${windowSize} 日均线预测 ${predictedDateLabel} 收盘价：${avg.toFixed(2)} USD</div>`;
+        // 多日 MA 预测
+        predictedDatesLabels.forEach(label => {
+          html += `<div class="prediction ${getUpDownClass(avg, lastPrice)}">${windowSize} 日均线预测 ${label} 收盘价：${avg.toFixed(2)} USD</div>`;
+        });
         // MA 详细演算
         html += `<details><summary>详细演算 (MA)</summary><ul>`;
         lastCloses.forEach((p,i) => html += `<li>P${i+1} = ${p.toFixed(2)}</li>`);
@@ -446,10 +458,12 @@
       const labels = timestamps.map(ts => new Date(ts * 1000).toLocaleDateString());
       // Build datasets with prediction points
       const historicalData = closes;
-      const maPredictionData = Array(closes.length).fill(null).concat([avg]);
+      const maPredictionData = Array(closes.length).fill(null).concat(Array(futureDays).fill(avg));
       const lrPredictionData = Array(closes.length).fill(null).concat([predLR]);
       const emaPredictionData = Array(closes.length).fill(null).concat([predEMA]);
-      const chartLabels = [...labels, predictedDateLabel];
+      const chartLabels = method === 'ma'
+        ? [...labels, ...predictedDatesLabels]
+        : [...labels, predictedDateLabel];
       // Build chart datasets based on selected method
       const datasets = [
         { label: '收盘价 (历史)', data: historicalData, borderColor: '#0077cc', fill: false, tension: 0.1 }
