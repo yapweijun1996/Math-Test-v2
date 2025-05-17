@@ -219,6 +219,12 @@
       const Mc = [[Sx0, Sx1, SumY], [Sx1, Sx2, SumXY], [Sx2, Sx3, SumX2Y]];
       const a_poly = det3(Ma)/D, b_poly = det3(Mb)/D, c_poly = det3(Mc)/D;
       const predPoly = a_poly + b_poly * n + c_poly * n * n;
+      // 多项式回归多日预测
+      const futurePredsPoly = [];
+      for (let i = 1; i <= futureDays; i++) {
+        const x = n + i - 1;
+        futurePredsPoly.push(a_poly + b_poly * x + c_poly * x * x);
+      }
       // 季节性模型 (Seasonal)
       const predSeasonal = lastCloses[0];
       // 均线 + 趋势 (MA + Trend)
@@ -366,7 +372,10 @@
       }
       if (method === 'poly' || method === 'all') {
         html += `<div class="method-card" data-method="poly">`;
-        html += `<div class="prediction ${getUpDownClass(predPoly, lastPrice)}">多项式回归 (Polynomial Regression) 预测 ${predictedDateLabel} 收盘价：${predPoly.toFixed(2)} USD</div>`;
+        // 多日多项式回归预测
+        futurePredsPoly.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">多项式回归 (Polynomial Regression) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // Poly 详细演算
         html += `<details><summary>详细演算 (Polynomial Regression)</summary><p>a = ${a_poly.toFixed(4)}, b = ${b_poly.toFixed(4)}, c = ${c_poly.toFixed(4)}</p><p>预测 = a + b×N + c×N²</p></details>`;
         html += `</div>`;
@@ -474,6 +483,7 @@
       const maPredictionData = Array(closes.length).fill(null).concat(Array(futureDays).fill(avg));
       const lrPredictionData = Array(closes.length).fill(null).concat(futurePredsLR);
       const emaPredictionData = Array(closes.length).fill(null).concat(futurePredsEMA);
+      const polyPredictionData = Array(closes.length).fill(null).concat(futurePredsPoly);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -490,7 +500,7 @@
         datasets.push({ label: '指数加权移动平均 (EMA) 预测', data: emaPredictionData, borderColor: '#ff0000', backgroundColor: '#ff0000', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'poly' || method === 'all') {
-        datasets.push({ label: '多项式回归 (Polynomial)', data: Array(closes.length).fill(null).concat([predPoly]), borderColor: '#cc0077', backgroundColor: '#cc0077', pointStyle: 'triangle', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: '多项式回归 (Polynomial)', data: polyPredictionData, borderColor: '#cc0077', backgroundColor: '#cc0077', pointStyle: 'triangle', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'seasonal' || method === 'all') {
         datasets.push({ label: '季节性 (Seasonal)', data: Array(closes.length).fill(null).concat([predSeasonal]), borderColor: '#7700cc', backgroundColor: '#7700cc', pointStyle: 'triangleRot', pointRadius: 6, type: 'scatter', showLine: false });
