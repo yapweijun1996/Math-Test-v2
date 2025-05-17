@@ -110,7 +110,39 @@
       .chart-panel {
         max-height: calc(100vh - 200px);
         overflow-y: auto;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 16px;
       }
+    }
+    /* Table styling improvements */
+    .result h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 4px;
+    }
+    .result table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .result th, .result td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    .result tbody tr:nth-child(odd) {
+      background: #f9f9f9;
+    }
+    .result tbody tr:hover {
+      background: #e6f7ff;
+    }
+    .result th {
+      background: #f0f0f0;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
   </style>
 </head>
@@ -156,7 +188,7 @@
         <div class="result" id="result"></div>
       </div>
       <div class="chart-panel">
-        <div class="chart-container" style="position: relative; width:100%; height:300px; margin-top:24px;">
+        <div class="chart-container" style="position: relative; width:100%; height:400px; margin-top:8px;">
           <button id="resetZoomBtn" style="position:absolute; top:8px; right:8px; z-index:10; padding:4px 8px; font-size:0.8rem;">重置缩放</button>
           <canvas id="stockChart"></canvas>
         </div>
@@ -261,7 +293,7 @@
       const resultDiv = document.getElementById('result');
       const method = document.getElementById('method').value;
       const futureDays = parseInt(document.getElementById('future-days').value, 10) || 1;
-      let html = `<div style="overflow-x:auto;"><table>
+      let html = `<h2>历史收盘数据</h2><div style="overflow-x:auto;"><table>
         <tr><th>日期</th><th>收盘价 (USD)</th></tr>`;
       for (let i = 0; i < timestamps.length; i++) {
         const date = new Date(timestamps[i] * 1000).toLocaleDateString();
@@ -689,8 +721,10 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          layout: { padding: { top: 20, bottom: 20, left: 10, right: 10 } },
           plugins: {
-            legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+            title: { display: true, text: '历史收盘价及多日预测', font: { size: 16 } },
+            legend: { display: true, position: 'bottom', align: 'center', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
             tooltip: { mode: 'index', intersect: false },
             zoom: {
               pan: { enabled: true, mode: 'x', threshold: 5 },
@@ -699,9 +733,9 @@
           },
           scales: {
             x: { grid: { display: false }, title: { display: true, text: '日期' }, ticks: { maxRotation: 45, minRotation: 30 } },
-            y: { grid: { color: '#eee' }, title: { display: true, text: '收盘价 (USD)' } }
+            y: { grid: { color: '#eee' }, title: { display: true, text: '收盘价 (USD)' }, beginAtZero: false }
           },
-          elements: { point: { radius: 4 }, line: { tension: 0.2 } }
+          elements: { point: { radius: 5 }, line: { tension: 0.1 } }
         }
       });
       // Reset zoom button handler
