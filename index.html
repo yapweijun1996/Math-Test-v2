@@ -37,20 +37,9 @@
       .prediction { font-size: 0.9rem; }
     }
     /* Responsive form layout */
-    .container > div:nth-child(-n+4) {
-      display: inline-block;
-      vertical-align: top;
-      width: calc(50% - 12px);
-      box-sizing: border-box;
-      margin-right: 12px;
-    }
-    .container > div:nth-child(-n+4):nth-child(2n) {
-      margin-right: 0;
-    }
     @media (max-width: 767px) {
-      .container > div:nth-child(-n+4) {
-        width: 100%;
-        margin-right: 0;
+      .form-row > div {
+        margin-bottom: 10px; /* Adjusted spacing for mobile */
       }
     }
     /* Method cards grid on desktop */
@@ -114,6 +103,40 @@
         border-radius: 6px;
         padding: 16px;
       }
+      .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-end;
+      }
+      .form-row > div {
+        flex: 1 1 200px;
+        min-width: 160px;
+        margin-bottom: 0;
+        padding: 8px;
+        background-color: #f9f9f9;
+        border: 1px solid #eee;
+        border-radius: 4px;
+      }
+      .form-row > div:last-child {
+        flex: 0 0 auto;
+        padding: 8px;
+        background-color: transparent;
+        border: none;
+      }
+      .form-row button {
+        margin-top: 0;
+        width: auto;
+        padding: 8px 20px;
+      }
+      .form-row label {
+        margin-bottom: 8px;
+      }
+      .form-row input[type="text"], .form-row input[type="number"], .form-row input[type="date"], .form-row select {
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
     }
     /* Table styling improvements */
     .result h2 {
@@ -161,15 +184,32 @@
         align-items: flex-end;
       }
       .form-row > div {
-        flex: 1 1 180px;
-        min-width: 140px;
+        flex: 1 1 200px;
+        min-width: 160px;
         margin-bottom: 0;
+        padding: 8px;
+        background-color: #f9f9f9;
+        border: 1px solid #eee;
+        border-radius: 4px;
       }
       .form-row > div:last-child {
         flex: 0 0 auto;
+        padding: 8px;
+        background-color: transparent;
+        border: none;
       }
       .form-row button {
         margin-top: 0;
+        width: auto;
+        padding: 8px 20px;
+      }
+      .form-row label {
+        margin-bottom: 8px;
+      }
+      .form-row input[type="text"], .form-row input[type="number"], .form-row input[type="date"], .form-row select {
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
       }
     }
     @media (max-width: 991px) {
