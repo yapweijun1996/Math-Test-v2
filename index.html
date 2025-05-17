@@ -491,6 +491,41 @@
       }
     }
     
+    // ========== Math utilities for error comparison ==========
+    // Weighted Moving Average predictor for next point
+    function weightedMA(arr) {
+      const n = arr.length;
+      const denom = n * (n + 1) / 2;
+      return arr.reduce((sum, v, i) => sum + (i + 1) * v, 0) / denom;
+    }
+
+    // Holt's Linear smoothing predictor for next point
+    function forecastHoltNext(arr, alpha, beta) {
+      let level = arr[0];
+      let trend = arr.length > 1 ? arr[1] - arr[0] : 0;
+      for (let i = 1; i < arr.length; i++) {
+        const value = arr[i];
+        const prevLevel = level;
+        level = alpha * value + (1 - alpha) * (level + trend);
+        trend = beta * (level - prevLevel) + (1 - beta) * trend;
+      }
+      return level + trend;
+    }
+
+    // Rolling forecast error calculator (returns MSE & MAE)
+    function rollingError(series, windowSize, predictorFn) {
+      const errors = [];
+      for (let t = windowSize; t < series.length; t++) {
+        const windowArr = series.slice(t - windowSize, t);
+        const pred = predictorFn(windowArr);
+        errors.push(pred - series[t]);
+      }
+      const count = errors.length;
+      const mse = errors.reduce((s, e) => s + e * e, 0) / count;
+      const mae = errors.reduce((s, e) => s + Math.abs(e), 0) / count;
+      return { mse, mae };
+    }
+
     // TensorFlow.js 简单神经网络预测
     async function predictWithTF(lastCloses) {
       const n = lastCloses.length;
@@ -919,32 +954,42 @@
       } else {
         html += `<div class="info">* 使用 Yahoo Finance 公开 API 获取实时数据。</div>`;
       }
-      html += `<div class="section-card"><h2>算法说明</h2><div class="algorithm"><strong>算法说明：</strong><br>
-        • N日均线 (Moving Average) = (P₁ + P₂ + ... + P_N) / N<br>
-        • 简单线性回归 (Linear Regression):<br>
-           &nbsp;&nbsp;斜率 b = Σ(i - x̄)(P_i - ȳ) / Σ(i - x̄)²<br>
-           &nbsp;&nbsp;截距 a = ȳ - b × x̄<br>
-           &nbsp;&nbsp;预测 Pₙ₊₁ = a + b × N<br>
-        • 指数加权移动平均 (EMA):<br>
-           &nbsp;&nbsp;使用霍尔特双指数平滑（含趋势分量）进行预测;<br>
-           &nbsp;&nbsp;水平更新: L_t = α·P_t + (1−α)·(L_{t−1}+T_{t−1});<br>
-           &nbsp;&nbsp;趋势更新: T_t = β·(L_t−L_{t−1}) + (1−β)·T_{t−1};<br>
-           &nbsp;&nbsp;预测 Pₙ₊ₕ = L_N + h·T_N;<br>
-        • 多项式回归 (Polynomial Regression):<br>
-           &nbsp;&nbsp;Fit y = a + b·x + c·x² via least squares;<br>
-           &nbsp;&nbsp;预测 Pₙ₊₁ ≈ a + b·N + c·N²;<br>
-        • 简单季节性模型 (Seasonal):<br>
-           &nbsp;&nbsp;If period = N, 预测用 P₁;<br>
-        • 均线 + 趋势 (MA + Trend):<br>
-           &nbsp;&nbsp;Avg = MA; Trend = LR; 预测 = (Avg + Trend预测)/2;<br>
-        • 自回归 (AR(p)):<br>
-           &nbsp;&nbsp;Pₜ₊₁ = c + Σ_{i=1..p} a_i P_{t-i+1};<br>
-        • ARIMA(p,d,q):<br>
-           &nbsp;&nbsp;(复杂模型, 涉及差分和MA);<br>
-        • 机器学习 (ML):<br>
-           &nbsp;&nbsp;如决策树、神经网络等;<br>
-        <br><code>// windowSize = N; slope = num/den; intercept = yMean - slope*xMean; predLR = intercept + slope*windowSize;  // EMA: α=2/(N+1); predEMA=last EMA value</code>
-       </div></div><div class="section-card"><h2>计算演示 (示例数据)</h2><div class="detail" style="margin-top:0; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
+      // 添加误差比较: MA, WMA, Holt
+      const errsMA = rollingError(closes, windowSize, arr => arr.reduce((s,v) => s + v, 0) / windowSize);
+      const errsWMA = rollingError(closes, windowSize, arr => weightedMA(arr));
+      const errsHolt = rollingError(closes, windowSize, arr => forecastHoltNext(arr, alphaH, betaH));
+      html += `<div class="section-card"><h2>误差比较</h2>`;
+      html += `<div class="error-info">MA 误差 (MSE: ${errsMA.mse.toFixed(2)}, MAE: ${errsMA.mae.toFixed(2)})</div>`;
+      html += `<div class="error-info">WMA 误差 (MSE: ${errsWMA.mse.toFixed(2)}, MAE: ${errsWMA.mae.toFixed(2)})</div>`;
+      html += `<div class="error-info">Holt 误差 (MSE: ${errsHolt.mse.toFixed(2)}, MAE: ${errsHolt.mae.toFixed(2)})</div>`;
+      html += `</div>`;
+      // 算法说明部分，更新 EMA 描述
+      html += `<div class="section-card"><h2>算法说明</h2><div class="algorithm"><strong>算法说明：</strong><br>`;
+      html += `• N日均线 (Moving Average) = (P₁ + P₂ + ... + P_N) / N<br>`;
+      html += `• 简单线性回归 (Linear Regression):<br>`;
+      html += `   &nbsp;&nbsp;斜率 b = Σ(i - x̄)(P_i - ȳ) / Σ(i - x̄)²<br>`;
+      html += `   &nbsp;&nbsp;截距 a = ȳ - b × x̄<br>`;
+      html += `   &nbsp;&nbsp;预测 Pₙ₊₁ = a + b × N<br>`;
+      html += `• 指数加权移动平均 (EMA):<br>`;
+      html += `   &nbsp;&nbsp;使用霍尔特双指数平滑（含趋势分量）进行预测;<br>`;
+      html += `   &nbsp;&nbsp;水平更新: L_t = α·P_t + (1−α)·(L_{t−1}+T_{t−1});<br>`;
+      html += `   &nbsp;&nbsp;趋势更新: T_t = β·(L_t−L_{t−1}) + (1−β)·T_{t−1};<br>`;
+      html += `   &nbsp;&nbsp;预测 Pₙ₊ₕ = L_N + h·T_N;<br>`;
+      html += `• 多项式回归 (Polynomial Regression):<br>`;
+      html += `   &nbsp;&nbsp;Fit y = a + b·x + c·x² via least squares;<br>`;
+      html += `   &nbsp;&nbsp;预测 Pₙ₊₁ ≈ a + b·N + c·N²;<br>`;
+      html += `• 简单季节性模型 (Seasonal):<br>`;
+      html += `   &nbsp;&nbsp;If period = N, 预测用 P₁;<br>`;
+      html += `• 均线 + 趋势 (MA + Trend):<br>`;
+      html += `   &nbsp;&nbsp;Avg = MA; Trend = LR; 预测 = (Avg + Trend预测)/2;<br>`;
+      html += `• 自回归 (AR(p)):<br>`;
+      html += `   &nbsp;&nbsp;Pₜ₊₁ = c + Σ_{i=1..p} a_i P_{t-i+1};<br>`;
+      html += `• ARIMA(p,d,q):<br>`;
+      html += `   &nbsp;&nbsp;(复杂模型, 涉及差分和MA);<br>`;
+      html += `• 机器学习 (ML):<br>`;
+      html += `   &nbsp;&nbsp;如决策树、神经网络等;<br>`;
+      html += `<br><code>// windowSize = N; slope = num/den; intercept = yMean - slope*xMean; predLR = intercept + slope*windowSize;  // EMA: α=2/(N+1); predEMA=last EMA value</code>`;
+      html += `</div></div><div class="section-card"><h2>计算演示 (示例数据)</h2><div class="detail" style="margin-top:0; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
         <h4>5日均线计算过程：</h4>
         <ul>
           <li>P₁=210.79, P₂=212.93, P₃=212.33, P₄=211.45, P₅=211.26</li>
