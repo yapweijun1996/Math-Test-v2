@@ -95,6 +95,23 @@
         font-size: 0.9rem;
       }
     }
+    /* Desktop two-column layout */
+    @media (min-width: 992px) {
+      .content-grid {
+        display: grid;
+        grid-template-columns: 2fr 3fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .controls-panel {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+      }
+      .chart-panel {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+      }
+    }
   </style>
 </head>
 <body>
@@ -134,10 +151,16 @@
       <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;">
     </div>
     <button onclick="fetchStock()">获取数据 (默认30日，可自定义)</button>
-    <div class="result" id="result"></div>
-    <div class="chart-container" style="position: relative; width:100%; height:300px; margin-top:24px;">
-      <button id="resetZoomBtn" style="position:absolute; top:8px; right:8px; z-index:10; padding:4px 8px; font-size:0.8rem;">重置缩放</button>
-      <canvas id="stockChart"></canvas>
+    <div class="content-grid">
+      <div class="controls-panel">
+        <div class="result" id="result"></div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-container" style="position: relative; width:100%; height:300px; margin-top:24px;">
+          <button id="resetZoomBtn" style="position:absolute; top:8px; right:8px; z-index:10; padding:4px 8px; font-size:0.8rem;">重置缩放</button>
+          <canvas id="stockChart"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 
