@@ -232,6 +232,182 @@
       border-bottom: 1px solid #eee;
       padding-bottom: 4px;
     }
+    /* Enhanced UX Styles */
+    /* Button styling */
+    button[type="submit"], #resetZoomBtn {
+      background: linear-gradient(to bottom, #2196F3, #1976D2);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    button[type="submit"]:hover, #resetZoomBtn:hover {
+      background: linear-gradient(to bottom, #1E88E5, #1565C0);
+      box-shadow: 0 3px 7px rgba(0,0,0,0.3);
+      transform: translateY(-1px);
+    }
+    button[type="submit"]:active, #resetZoomBtn:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    /* Input focus styling */
+    input:focus, select:focus {
+      border-color: #2196F3 !important;
+      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+      outline: none;
+    }
+    /* Loading state */
+    .loading {
+      position: relative;
+    }
+    .loading::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.7);
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .loading::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      margin: -20px 0 0 -20px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #2196F3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 11;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* Tooltip styling */
+    [data-tooltip] {
+      position: relative;
+      cursor: help;
+    }
+    [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 10;
+      margin-bottom: 5px;
+    }
+    [data-tooltip]:hover::before {
+      content: "";
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #333;
+      margin-bottom: -5px;
+      z-index: 10;
+    }
+    /* Chart container and reset zoom button */
+    .chart-container {
+      position: relative;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      padding: 20px;
+      background: white;
+    }
+    #resetZoomBtn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 10;
+      font-size: 0.85rem;
+      padding: 6px 10px;
+    }
+    /* Instructions tooltip */
+    .chart-instructions {
+      position: absolute;
+      bottom: 35px;
+      right: 10px;
+      font-size: 12px;
+      color: #666;
+      background: rgba(255,255,255,0.8);
+      padding: 4px 8px;
+      border-radius: 4px;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    /* Improved method card styling */
+    .method-card {
+      border: 1px solid #ddd;
+      padding: 10px 16px;
+      margin-top: 12px;
+      border-radius: 8px;
+      background: #fafafa;
+      transition: all 0.3s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .method-card.highlighted {
+      border-color: #0077cc;
+      background: #e6f7ff;
+      box-shadow: 0 3px 8px rgba(0,123,255,0.15);
+    }
+    .method-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    /* Prediction text animation */
+    .prediction {
+      position: relative;
+      color: #007700;
+      font-weight: bold;
+      margin-top: 12px;
+      padding-left: 16px;
+    }
+    .prediction.up::before {
+      content: "▲";
+      position: absolute;
+      left: 0;
+      color: #008800;
+    }
+    .prediction.down::before {
+      content: "▼";
+      position: absolute;
+      left: 0;
+      color: #cc0000;
+    }
+    .prediction.up {
+      color: #008800;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    .prediction.down {
+      color: #cc0000;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
@@ -242,15 +418,15 @@
       <form class="form-row" onsubmit="fetchStock(); return false;">
         <div>
           <label for="symbol">股票代码：</label>
-          <input type="text" id="symbol" placeholder="AAPL">
+          <input type="text" id="symbol" placeholder="AAPL" data-tooltip="输入股票代码，例如：AAPL (苹果)、MSFT (微软)">
         </div>
         <div>
           <label for="window-size">窗口大小 (天)：</label>
-          <input type="number" id="window-size" min="1" max="365" value="30" style="width:60px;">
+          <input type="number" id="window-size" min="1" max="365" value="30" style="width:60px;" data-tooltip="历史数据窗口大小，用于计算预测值">
         </div>
         <div>
           <label for="method">预测方法：</label>
-          <select id="method">
+          <select id="method" data-tooltip="选择不同的预测算法，或使用'所有方法'同时比较">
             <option value="all">所有方法</option>
             <option value="ma">N日均线</option>
             <option value="lr">线性回归</option>
@@ -266,14 +442,14 @@
         <input type="hidden" id="start-date">
         <div>
           <label for="end-date">结束日期：</label>
-          <input type="date" id="end-date">
+          <input type="date" id="end-date" data-tooltip="历史数据的结束日期">
         </div>
         <div>
           <label for="future-days">预测天数：</label>
-          <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;">
+          <input type="number" id="future-days" min="1" max="30" value="1" style="width:60px;" data-tooltip="需要预测的未来天数（1-30天）">
         </div>
         <div>
-          <button type="submit">获取数据 (默认30日, 可自定义)</button>
+          <button type="submit">获取数据</button>
         </div>
       </form>
     </div>
@@ -283,7 +459,8 @@
       </div>
       <div class="chart-panel">
         <div class="chart-container" style="position: relative; width:100%; height:400px; margin-top:8px;">
-          <button id="resetZoomBtn" style="position:absolute; top:8px; right:8px; z-index:10; padding:4px 8px; font-size:0.8rem;">重置缩放</button>
+          <button id="resetZoomBtn">重置缩放</button>
+          <div class="chart-instructions">提示: 滚轮缩放, 拖拽平移</div>
           <canvas id="stockChart"></canvas>
         </div>
       </div>
@@ -295,6 +472,25 @@
   <script src="https://unpkg.com/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
   <script>
     let chartInstance = null; // Chart.js instance reuse
+    let isLoading = false; // Track loading state
+    
+    // Show/hide loading indicator
+    function setLoading(loading) {
+      isLoading = loading;
+      const container = document.querySelector('.container');
+      if (loading) {
+        container.classList.add('loading');
+        document.querySelectorAll('button, input, select').forEach(el => {
+          el.disabled = true;
+        });
+      } else {
+        container.classList.remove('loading');
+        document.querySelectorAll('button, input, select').forEach(el => {
+          el.disabled = false;
+        });
+      }
+    }
+    
     // TensorFlow.js 简单神经网络预测
     async function predictWithTF(lastCloses) {
       const n = lastCloses.length;
@@ -343,9 +539,19 @@
       updateStartDate();
       document.getElementById('window-size').addEventListener('input', updateStartDate);
       endInput.addEventListener('input', updateStartDate);
+      
+      // Add tooltip positioning fix for mobile
+      document.querySelectorAll('[data-tooltip]').forEach(el => {
+        el.addEventListener('touchstart', function(e) {
+          const tooltip = this.getAttribute('data-tooltip');
+          alert(tooltip);
+          e.preventDefault();
+        });
+      });
     });
 
     async function fetchStock() {
+      setLoading(true); // Start loading
       const resultDiv = document.getElementById('result');
       resultDiv.innerHTML = "加载中...";
       const symbolInput = document.getElementById('symbol').value.trim().toUpperCase();
@@ -354,6 +560,7 @@
       const endDate = document.getElementById('end-date').value;
       if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
         resultDiv.innerHTML = '<div class="error">错误：开始日期不能晚于结束日期。</div>';
+        setLoading(false); // Stop loading
         return;
       }
       let url;
@@ -379,7 +586,8 @@
         console.error("Fetch failed", e);
         // Display error to user, no static fallback
         resultDiv.innerHTML = '<div class="error">数据获取失败，请检查网络连接或输入是否有效。</div>';
-        return;
+      } finally {
+        setLoading(false); // Stop loading
       }
     }
 
@@ -387,7 +595,7 @@
       const resultDiv = document.getElementById('result');
       const method = document.getElementById('method').value;
       const futureDays = parseInt(document.getElementById('future-days').value, 10) || 1;
-      let html = `<h2>历史收盘数据</h2><div style="overflow-x:auto;"><table>
+      let html = `<div class="section-card"><h2>历史收盘数据</h2><div style="overflow-x:auto;"><table>
         <tr><th>日期</th><th>收盘价 (USD)</th></tr>`;
       for (let i = 0; i < timestamps.length; i++) {
         const date = new Date(timestamps[i] * 1000).toLocaleDateString();
@@ -818,17 +1026,48 @@
           plugins: {
             title: { display: true, text: '历史收盘价及多日预测', font: { size: 16 } },
             legend: { display: true, position: 'bottom', align: 'center', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
-            tooltip: { mode: 'index', intersect: false },
+            tooltip: { 
+              mode: 'index', 
+              intersect: false,
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              titleFont: { size: 13 },
+              bodyFont: { size: 12 },
+              padding: 10,
+              displayColors: true,
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  if (context.parsed.y !== null) {
+                    label += new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                  }
+                  return label;
+                }
+              }
+            },
             zoom: {
               pan: { enabled: true, mode: 'x', threshold: 5 },
               zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
             }
           },
+          interaction: {
+            intersect: false,
+            mode: 'index',
+          },
           scales: {
             x: { grid: { display: false }, title: { display: true, text: '日期' }, ticks: { maxRotation: 45, minRotation: 30 } },
             y: { grid: { color: '#eee' }, title: { display: true, text: '收盘价 (USD)' }, beginAtZero: false }
           },
-          elements: { point: { radius: 5 }, line: { tension: 0.1 } }
+          elements: { 
+            point: { radius: 3, hoverRadius: 7 }, 
+            line: { tension: 0.1 } 
+          },
+          animation: {
+            duration: 1000,
+            easing: 'easeOutQuart'
+          }
         }
       });
       // Reset zoom button handler
