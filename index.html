@@ -84,10 +84,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/chartjs-plugin-zoom@2.1.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.1.1/chartjs-plugin-zoom.min.js"></script>
   <script>
-    // Register Zoom plugin for Chart.js
-    Chart.register(window['chartjsPluginZoom']);
     let chartInstance = null; // Chart.js instance reuse
     // TensorFlow.js 简单神经网络预测
     async function predictWithTF(lastCloses) {
