@@ -276,6 +276,17 @@
       const c2 = meanY2 - a2 * meanX2;
       const predDiff = c2 + a2 * diffs[m2 - 1];
       const predARIMA = lastCloses[n-1] + predDiff;
+      // 多日 ARIMA(1,1,0) 预测
+      const futurePredsARIMA = [];
+      let diffPrev = diffs[m2 - 1];
+      let prevClose = lastCloses[n - 1];
+      for (let i = 1; i <= futureDays; i++) {
+        const diffPred = c2 + a2 * diffPrev;
+        const closePred = prevClose + diffPred;
+        futurePredsARIMA.push(closePred);
+        diffPrev = diffPred;
+        prevClose = closePred;
+      }
       // 机器学习 (ML) 预测：TensorFlow.js 神经网络
       let predML = (avg + predLR + predEMA) / 3;
       try {
@@ -424,7 +435,10 @@
       }
       if (method === 'arima' || method === 'all') {
         html += `<div class="method-card" data-method="arima">`;
-        html += `<div class="prediction ${getUpDownClass(predARIMA, lastPrice)}">ARIMA(1,1,0) 预测 ${predictedDateLabel} 收盘价：${predARIMA.toFixed(2)} USD</div>`;
+        // 多日 ARIMA 预测
+        futurePredsARIMA.forEach((pred, idx) => {
+          html += `<div class="prediction ${getUpDownClass(pred, lastPrice)}">ARIMA(1,1,0) 预测 ${predictedDatesLabels[idx]} 收盘价：${pred.toFixed(2)} USD</div>`;
+        });
         // ARIMA 详细演算
         html += `<details><summary>详细演算 (ARIMA)</summary><p>a₂ = ${a2.toFixed(4)}, c₂ = ${c2.toFixed(4)}, 差分预测 = ${predDiff.toFixed(2)}, 预测 = Pₙ + 差分 = ${predARIMA.toFixed(2)}</p></details>`;
         html += `</div>`;
@@ -508,6 +522,7 @@
       const seasonalPredictionData = Array(closes.length).fill(null).concat(futurePredsSeasonal);
       const maTrendPredictionData = Array(closes.length).fill(null).concat(futurePredsMAtrend);
       const arPredictionData = Array(closes.length).fill(null).concat(futurePredsAR);
+      const arimaPredictionData = Array(closes.length).fill(null).concat(futurePredsARIMA);
       // 多日预测时使用全部预测日期标签
       const chartLabels = [...labels, ...predictedDatesLabels];
       // Build chart datasets based on selected method
@@ -536,7 +551,7 @@
         datasets.push({ label: '自回归 (AR)', data: arPredictionData, borderColor: '#cc7700', backgroundColor: '#cc7700', pointStyle: 'cross', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'arima' || method === 'all') {
-        datasets.push({ label: 'ARIMA', data: Array(closes.length).fill(null).concat([predARIMA]), borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'scatter', showLine: false });
+        datasets.push({ label: 'ARIMA', data: arimaPredictionData, borderColor: '#ff00cc', backgroundColor: '#ff00cc', pointStyle: 'star', pointRadius: 6, type: 'scatter', showLine: false });
       }
       if (method === 'ml' || method === 'all') {
         datasets.push({ label: '机器学习 (ML)', data: Array(closes.length).fill(null).concat([predML]), borderColor: '#000000', backgroundColor: '#000000', pointStyle: 'circle', pointRadius: 6, type: 'scatter', showLine: false });
