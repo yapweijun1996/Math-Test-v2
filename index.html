@@ -177,6 +177,21 @@
         margin-bottom: 10px;
       }
     }
+    /* Section card styling */
+    .section-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      margin-bottom: 24px;
+      padding: 18px 18px 12px 18px;
+    }
+    .section-card h2 {
+      font-size: 1.15rem;
+      margin: 0 0 12px 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+    }
   </style>
 </head>
 <body>
@@ -494,6 +509,7 @@
       }
       html += `<div class="info">数据范围：${new Date(timestamps[0] * 1000).toLocaleDateString()} - ${new Date(timestamps[timestamps.length - 1] * 1000).toLocaleDateString()}</div>`;
       if (method === 'ma' || method === 'all') {
+        if (!html.includes('<!--pred-section-start-->')) html += '<!--pred-section-start--><div class="section-card"><h2>预测结果</h2>';
         html += `<div class="method-card" data-method="ma">`;
         // 多日滚动 MA 预测
         futurePredsMArolling.forEach((pred, idx) => {
@@ -642,12 +658,13 @@
         html += `<details><summary>详细演算 (ML 集成)</summary><p>MA = ${avg.toFixed(2)}, LR = ${predLR.toFixed(2)}, EMA = ${predEMA.toFixed(2)}</p><p>ML = (MA + LR + EMA)/3 = ${predML.toFixed(2)}</p></details>`;
         html += `</div>`;
       }
+      if (!html.includes('<!--pred-section-end-->')) html += '</div><!--pred-section-end-->';
       if (isFallback) {
         html += `<div class="info">* 使用静态示例数据演示，无需 API Key 或代理。</div>`;
       } else {
         html += `<div class="info">* 使用 Yahoo Finance 公开 API 获取实时数据。</div>`;
       }
-      html += `<div class="algorithm"><strong>算法说明：</strong><br>
+      html += `<div class="section-card"><h2>算法说明</h2><div class="algorithm"><strong>算法说明：</strong><br>
         • N日均线 (Moving Average) = (P₁ + P₂ + ... + P_N) / N<br>
         • 简单线性回归 (Linear Regression):<br>
            &nbsp;&nbsp;斜率 b = Σ(i - x̄)(P_i - ȳ) / Σ(i - x̄)²<br>
@@ -671,10 +688,7 @@
         • 机器学习 (ML):<br>
            &nbsp;&nbsp;如决策树、神经网络等;<br>
         <br><code>// windowSize = N; slope = num/den; intercept = yMean - slope*xMean; predLR = intercept + slope*windowSize;  // EMA: α=2/(N+1); predEMA=last EMA value</code>
-       </div>`;
-      // Add detailed calculation walkthrough example
-      html += `<div class="detail" style="margin-top:16px; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
-        <h3>计算演示 (示例数据)</h3>
+       </div></div><div class="section-card"><h2>计算演示 (示例数据)</h2><div class="detail" style="margin-top:0; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
         <h4>5日均线计算过程：</h4>
         <ul>
           <li>P₁=210.79, P₂=212.93, P₃=212.33, P₄=211.45, P₅=211.26</li>
@@ -694,7 +708,7 @@
         <p>斜率 b = -0.54 / 10 = -0.054</p>
         <p>截距 a = ȳ - b × x̄ = 211.75 + 0.054 × 2 = 211.86</p>
         <p>预测 P₆ = a + b × 5 = 211.86 - 0.27 = 211.59</p>
-      </div>`;
+      </div></div>`;
       resultDiv.innerHTML = html;
       // 高亮当前方法卡片
       document.querySelectorAll('.method-card').forEach(card => {
